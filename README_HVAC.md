@@ -62,10 +62,10 @@ All frames start with `0x7A 0x7A` and end with a 16-bit CRC.
 ```
 acw02_zb/
 ├── main/
-│   ├── esp_zb_hvac.c          # Main Zigbee application
+│   ├── esp_zb_aeris.c         # Main Zigbee application (renamed from esp_zb_hvac.c)
 │   ├── esp_zb_light.h         # Zigbee configuration header
-│   ├── hvac_driver.c          # HVAC UART driver implementation
-│   ├── hvac_driver.h          # HVAC driver header
+│   ├── aeris_driver.c         # Aeris/ACW02 UART driver implementation (renamed from hvac_driver.c)
+│   ├── aeris_driver.h         # Aeris driver header (renamed from hvac_driver.h)
 │   ├── CMakeLists.txt         # Component build configuration
 │   └── idf_component.yml      # Component dependencies
 ├── CMakeLists.txt             # Project CMakeLists

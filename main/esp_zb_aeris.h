@@ -1,16 +1,12 @@
 /*
- * SPDX-FileCopyrightText: 2024 Espressif Systems (Shanghai) CO LTD
- *
- * SPDX-License-Identifier: LicenseRef-Included
- *
- * Zigbee HVAC Thermostat Header
+ * Zigbee Aeris Thermostat Header (renamed from esp_zb_hvac.h)
  */
 
-#ifndef ESP_ZB_HVAC_H
-#define ESP_ZB_HVAC_H
+#ifndef ESP_ZB_AERIS_H
+#define ESP_ZB_AERIS_H
 
 #include "esp_zigbee_core.h"
-#include "hvac_driver.h"
+#include "aeris_driver.h"
 #include "zcl_utility.h"
 
 /* Zigbee configuration */

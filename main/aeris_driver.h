@@ -1,6 +1,6 @@
 /*
- * HVAC Driver Header
- * 
+ * Aeris Driver Header (renamed from hvac_driver.h)
+ *
  * Handles UART communication with ACW02 HVAC device
  * Supports control of mode, temperature, eco, swing, display
  */
