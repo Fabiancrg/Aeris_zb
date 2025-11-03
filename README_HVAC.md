@@ -7,7 +7,7 @@ This project implements a Zigbee End Device that reads air quality sensors and e
 - ESP32-C6 development board (or compatible)
 - Air quality sensors:
   - Temperature and Humidity sensor (e.g., SHT4x, BME280) via I2C
-  - Pressure sensor (e.g., BMP280, BME280) via I2C
+  - **LPS22HB Pressure sensor** via I2C
   - **PMSA003A Particulate Matter sensor** via UART
   - VOC Index sensor (e.g., SGP40, BME680) via I2C
   - CO2 sensor (e.g., SCD40, SCD41) via I2C
@@ -24,6 +24,10 @@ The Zigbee air quality sensor exposes the following sensor endpoints:
 
 ### Endpoint 2: Pressure Sensor
 - **Pressure Measurement Cluster (0x0403)**: Atmospheric pressure in hPa
+- **Sensor**: STMicroelectronics LPS22HB (I2C)
+- **Update Rate**: 25 Hz (configurable)
+- **Range**: 260-1260 hPa
+- **Accuracy**: ±0.025 hPa (typical)
 
 ### Endpoint 3: Particulate Matter (PM) Sensor
 - **PM2.5 Measurement**: Fine particulate matter (µg/m³) from PMSA003A
@@ -48,6 +52,9 @@ The device communicates with most sensors via I2C:
 - **SCL Pin**: GPIO 7 (configurable in `aeris_driver.h`)
 - **Frequency**: 100 kHz
 - **Pull-ups**: Internal pull-ups enabled
+
+**I2C Addresses:**
+- LPS22HB (Pressure): 0x5C (default, SA0=0) or 0x5D (SA0=1)
 
 ### UART for PMSA003A (Particulate Matter Sensor)
 
@@ -153,8 +160,14 @@ This project provides a framework for air quality sensors. You'll need to implem
 - **DHT22**: Budget option
 
 ### Pressure
-- **BMP280**: Barometric pressure sensor
-- **BME280**: Combined temp/humidity/pressure
+- **LPS22HB** (implemented): STMicroelectronics MEMS pressure sensor
+  - I2C interface (address 0x5C or 0x5D)
+  - Measures 260-1260 hPa
+  - ±0.025 hPa accuracy
+  - Internal temperature sensor (bonus)
+  - Low power: 3 µA @ 1Hz
+  - Configurable output rate (1-75 Hz)
+- **Alternative**: BMP280, BME280 (Bosch sensors)
 
 ### Particulate Matter
 - **PMSA003A** (implemented): Plantower laser PM sensor
@@ -184,11 +197,18 @@ The `aeris_driver.c` file contains:
    - Automatic atmospheric environment values
    - Particle count data available
 
-2. **I2C sensor stubs** (need implementation):
-   - Add sensor-specific libraries to `idf_component.yml`
-   - Implement sensor initialization in `aeris_driver_init()`
-   - Implement actual I2C read functions for each sensor
-   - Update the periodic read task to poll all sensors
+2. **LPS22HB implementation** (complete):
+   - I2C initialization and device detection
+   - WHO_AM_I verification (0xB1)
+   - 25 Hz output data rate
+   - Block data update enabled
+   - Pressure reading in hPa
+   - Temperature reading included
+
+3. **I2C sensor stubs** (need implementation):
+   - Temperature/Humidity sensor
+   - VOC sensor
+   - CO2 sensor
 
 ### PMSA003A Wiring
 
@@ -205,6 +225,19 @@ NC  (Pin 8)  → Not connected
 ```
 
 **Note**: PMSA003A requires 5V power supply. TX output is 3.3V compatible.
+
+### LPS22HB Wiring
+
+```
+LPS22HB Pin → ESP32-C6
+VDD         → 3.3V
+GND         → GND
+SCL         → GPIO 7 (I2C SCL)
+SDA         → GPIO 6 (I2C SDA)
+SA0         → GND (for address 0x5C) or 3.3V (for 0x5D)
+```
+
+**Note**: LPS22HB operates at 1.7-3.6V. Use 3.3V supply.
 
 ## Removed Features
 
@@ -229,9 +262,11 @@ All HVAC control logic has been replaced with air quality sensor reading functio
 - **I2C sensors**:
   - Verify I2C wiring (SDA/SCL connections)
   - Check I2C pull-up resistors (usually 4.7kΩ)
-  - Verify sensor power supply (usually 3.3V)
+  - Verify sensor power supply (3.3V for LPS22HB)
   - Use `i2cdetect` to scan for sensor addresses
   - Monitor I2C traffic in logs
+  - **LPS22HB**: Check WHO_AM_I register (should be 0xB1)
+  - **LPS22HB**: Verify address 0x5C or 0x5D (depends on SA0 pin)
 - **PMSA003A (PM sensor)**:
   - Verify UART RX connection (PMSA003A TX → GPIO20)
   - Check 5V power supply to sensor

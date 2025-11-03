@@ -17,6 +17,21 @@
 
 static const char *TAG = "AERIS_DRIVER";
 
+/* LPS22HB Register Addresses */
+#define LPS22HB_WHO_AM_I        0x0F  // Device identification (should return 0xB1)
+#define LPS22HB_CTRL_REG1       0x10  // Control register 1
+#define LPS22HB_CTRL_REG2       0x11  // Control register 2
+#define LPS22HB_CTRL_REG3       0x12  // Control register 3
+#define LPS22HB_STATUS_REG      0x27  // Status register
+#define LPS22HB_PRESS_OUT_XL    0x28  // Pressure output low byte
+#define LPS22HB_PRESS_OUT_L     0x29  // Pressure output middle byte
+#define LPS22HB_PRESS_OUT_H     0x2A  // Pressure output high byte
+#define LPS22HB_TEMP_OUT_L      0x2B  // Temperature output low byte
+#define LPS22HB_TEMP_OUT_H      0x2C  // Temperature output high byte
+
+/* LPS22HB Constants */
+#define LPS22HB_DEVICE_ID       0xB1  // WHO_AM_I expected value
+
 /* PMSA003A frame structure */
 #define PMSA003A_FRAME_LENGTH   32
 #define PMSA003A_START_CHAR_1   0x42
@@ -54,6 +69,117 @@ static aeris_sensor_state_t current_state = {
 /* PMSA003A latest data */
 static pmsa003a_data_t pmsa003a_data = {0};
 static bool pmsa003a_data_valid = false;
+
+/* LPS22HB sensor state */
+static bool lps22hb_initialized = false;
+
+/**
+ * @brief Write to LPS22HB register
+ */
+static esp_err_t lps22hb_write_reg(uint8_t reg, uint8_t value)
+{
+    uint8_t write_buf[2] = {reg, value};
+    esp_err_t ret = i2c_master_write_to_device(AERIS_I2C_NUM, LPS22HB_I2C_ADDR,
+                                                write_buf, sizeof(write_buf),
+                                                pdMS_TO_TICKS(1000));
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "LPS22HB write reg 0x%02X failed: %s", reg, esp_err_to_name(ret));
+    }
+    return ret;
+}
+
+/**
+ * @brief Read from LPS22HB register
+ */
+static esp_err_t lps22hb_read_reg(uint8_t reg, uint8_t *data, size_t len)
+{
+    esp_err_t ret = i2c_master_write_read_device(AERIS_I2C_NUM, LPS22HB_I2C_ADDR,
+                                                  &reg, 1, data, len,
+                                                  pdMS_TO_TICKS(1000));
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "LPS22HB read reg 0x%02X failed: %s", reg, esp_err_to_name(ret));
+    }
+    return ret;
+}
+
+/**
+ * @brief Initialize LPS22HB pressure sensor
+ */
+static esp_err_t lps22hb_init(void)
+{
+    ESP_LOGI(TAG, "Initializing LPS22HB pressure sensor...");
+    
+    // Check WHO_AM_I
+    uint8_t device_id;
+    esp_err_t ret = lps22hb_read_reg(LPS22HB_WHO_AM_I, &device_id, 1);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "LPS22HB not responding on I2C");
+        return ret;
+    }
+    
+    if (device_id != LPS22HB_DEVICE_ID) {
+        ESP_LOGE(TAG, "LPS22HB WHO_AM_I mismatch: expected 0x%02X, got 0x%02X",
+                 LPS22HB_DEVICE_ID, device_id);
+        return ESP_ERR_NOT_FOUND;
+    }
+    
+    ESP_LOGI(TAG, "LPS22HB detected, device ID: 0x%02X", device_id);
+    
+    // Software reset
+    ret = lps22hb_write_reg(LPS22HB_CTRL_REG2, 0x04);
+    if (ret != ESP_OK) return ret;
+    vTaskDelay(pdMS_TO_TICKS(10));
+    
+    // Configure sensor
+    // CTRL_REG1: ODR=25Hz (0b011), Enable block data update (BDU=1)
+    // ODR bits [6:4]: 000=one-shot, 001=1Hz, 010=10Hz, 011=25Hz, 100=50Hz, 101=75Hz
+    ret = lps22hb_write_reg(LPS22HB_CTRL_REG1, 0x3A);  // 0b00111010 = 25Hz, BDU=1, LPF enabled
+    if (ret != ESP_OK) return ret;
+    
+    lps22hb_initialized = true;
+    ESP_LOGI(TAG, "LPS22HB initialized successfully (25 Hz, BDU enabled)");
+    
+    return ESP_OK;
+}
+
+/**
+ * @brief Read pressure and temperature from LPS22HB
+ */
+static esp_err_t lps22hb_read_data(float *pressure_hpa, float *temperature_c)
+{
+    if (!lps22hb_initialized) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    
+    // Check if new data is available
+    uint8_t status;
+    esp_err_t ret = lps22hb_read_reg(LPS22HB_STATUS_REG, &status, 1);
+    if (ret != ESP_OK) return ret;
+    
+    // Read pressure (24-bit value)
+    uint8_t press_data[3];
+    ret = lps22hb_read_reg(LPS22HB_PRESS_OUT_XL, press_data, 3);
+    if (ret != ESP_OK) return ret;
+    
+    // Read temperature (16-bit value)
+    uint8_t temp_data[2];
+    ret = lps22hb_read_reg(LPS22HB_TEMP_OUT_L, temp_data, 2);
+    if (ret != ESP_OK) return ret;
+    
+    // Convert pressure (24-bit signed integer to hPa)
+    int32_t press_raw = (int32_t)((press_data[2] << 16) | (press_data[1] << 8) | press_data[0]);
+    // Sign extend from 24-bit to 32-bit
+    if (press_raw & 0x800000) {
+        press_raw |= 0xFF000000;
+    }
+    *pressure_hpa = press_raw / 4096.0f;  // LSB = 1/4096 hPa
+    
+    // Convert temperature (16-bit signed integer to °C)
+    int16_t temp_raw = (int16_t)((temp_data[1] << 8) | temp_data[0]);
+    *temperature_c = temp_raw / 100.0f;  // LSB = 1/100 °C
+    
+    return ESP_OK;
+}
 
 /**
  * @brief Initialize PMSA003A UART
@@ -256,6 +382,13 @@ esp_err_t aeris_driver_init(void)
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to initialize I2C: %s", esp_err_to_name(ret));
         // Continue anyway - PM sensor uses UART
+    } else {
+        // Initialize LPS22HB pressure sensor
+        ret = lps22hb_init();
+        if (ret != ESP_OK) {
+            ESP_LOGW(TAG, "Failed to initialize LPS22HB: %s", esp_err_to_name(ret));
+            ESP_LOGW(TAG, "Continuing without pressure sensor");
+        }
     }
     
     // Initialize PMSA003A UART
@@ -274,12 +407,11 @@ esp_err_t aeris_driver_init(void)
     
     // TODO: Initialize other sensors here
     // - Temperature/Humidity sensor (e.g., SHT4x, BME280)
-    // - Pressure sensor (e.g., BMP280, BME280)
     // - VOC sensor (e.g., SGP40, BME680)
     // - CO2 sensor (e.g., SCD40, SCD41)
     
     ESP_LOGI(TAG, "Aeris driver initialized successfully");
-    ESP_LOGW(TAG, "Note: I2C sensor initialization stubs - implement actual sensor init");
+    ESP_LOGW(TAG, "Note: Some I2C sensors still need implementation");
     
     return ESP_OK;
 }
@@ -325,12 +457,25 @@ esp_err_t aeris_read_pressure(float *pressure_hpa)
         return ESP_ERR_INVALID_ARG;
     }
     
-    // TODO: Implement actual sensor reading
-    // Example for BMP280 or BME280
+    // Read from LPS22HB sensor
+    if (!lps22hb_initialized) {
+        ESP_LOGW(TAG, "LPS22HB not initialized");
+        *pressure_hpa = current_state.pressure_hpa;
+        return ESP_ERR_INVALID_STATE;
+    }
     
-    *pressure_hpa = current_state.pressure_hpa;
+    float temp_c;
+    esp_err_t ret = lps22hb_read_data(pressure_hpa, &temp_c);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to read LPS22HB: %s", esp_err_to_name(ret));
+        *pressure_hpa = current_state.pressure_hpa;
+        return ret;
+    }
     
-    ESP_LOGD(TAG, "Pressure: %.2f hPa", *pressure_hpa);
+    // Update current state
+    current_state.pressure_hpa = *pressure_hpa;
+    
+    ESP_LOGD(TAG, "Pressure: %.2f hPa, Temp: %.2f°C", *pressure_hpa, temp_c);
     return ESP_OK;
 }
 

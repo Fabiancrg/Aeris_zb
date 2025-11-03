@@ -36,6 +36,9 @@ typedef struct {
 #define AERIS_I2C_SCL_PIN       7    // GPIO7 (adjust for your board)
 #define AERIS_I2C_FREQ_HZ       100000
 
+/* LPS22HB Pressure Sensor I2C Address */
+#define LPS22HB_I2C_ADDR        0x5C  // 0x5C when SA0=0, 0x5D when SA0=1
+
 /* UART Configuration for PMSA003A */
 #define PMSA003A_UART_NUM       UART_NUM_1
 #define PMSA003A_UART_TX_PIN    18   // GPIO18 (TX - not used for PMSA003A)
