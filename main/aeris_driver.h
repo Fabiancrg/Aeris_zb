@@ -39,6 +39,9 @@ typedef struct {
 #define AERIS_I2C_SCL_PIN       7    // GPIO7 (adjust for your board)
 #define AERIS_I2C_FREQ_HZ       100000
 
+/* SHT45 Temperature/Humidity Sensor I2C Address */
+#define SHT45_I2C_ADDR          0x44  // Fixed I2C address
+
 /* LPS22HB Pressure Sensor I2C Address */
 #define LPS22HB_I2C_ADDR        0x5C  // 0x5C when SA0=0, 0x5D when SA0=1
 

@@ -17,6 +17,15 @@
 
 static const char *TAG = "AERIS_DRIVER";
 
+/* SHT45 Commands (high repeatability) */
+#define SHT45_CMD_MEASURE_HIGH  0xFD  // Measure T & RH with high precision (8.2ms)
+#define SHT45_CMD_SOFT_RESET    0x94  // Soft reset
+#define SHT45_CMD_READ_SERIAL   0x89  // Read serial number
+
+/* SHT45 timing constants (in ms) */
+#define SHT45_MEASURE_TIME_MS   10    // Measurement duration for high precision
+#define SHT45_RESET_TIME_MS     1     // Time after soft reset
+
 /* LPS22HB Register Addresses */
 #define LPS22HB_WHO_AM_I        0x0F  // Device identification (should return 0xB1)
 #define LPS22HB_CTRL_REG1       0x10  // Control register 1
@@ -86,6 +95,10 @@ static aeris_sensor_state_t current_state = {
 static pmsa003a_data_t pmsa003a_data = {0};
 static bool pmsa003a_data_valid = false;
 
+/* SHT45 sensor state */
+static bool sht45_initialized = false;
+static uint32_t sht45_serial_number = 0;
+
 /* LPS22HB sensor state */
 static bool lps22hb_initialized = false;
 
@@ -95,9 +108,9 @@ static uint64_t sgp41_serial_number = 0;
 static TickType_t sgp41_last_measure_time = 0;
 
 /**
- * @brief Calculate CRC8 for SGP41 (polynomial 0x31, init 0xFF)
+ * @brief Calculate CRC8 for SHT45 and SGP41 (polynomial 0x31, init 0xFF)
  */
-static uint8_t sgp41_crc8(const uint8_t *data, size_t len)
+static uint8_t sensirion_crc8(const uint8_t *data, size_t len)
 {
     uint8_t crc = 0xFF;
     for (size_t i = 0; i < len; i++) {
@@ -111,6 +124,127 @@ static uint8_t sgp41_crc8(const uint8_t *data, size_t len)
         }
     }
     return crc;
+}
+
+/**
+ * @brief Initialize SHT45 temperature and humidity sensor
+ */
+static esp_err_t sht45_init(void)
+{
+    ESP_LOGI(TAG, "Initializing SHT45 temperature/humidity sensor...");
+    
+    // Send soft reset command
+    uint8_t reset_cmd = SHT45_CMD_SOFT_RESET;
+    esp_err_t ret = i2c_master_write_to_device(AERIS_I2C_NUM, SHT45_I2C_ADDR,
+                                                &reset_cmd, 1, pdMS_TO_TICKS(1000));
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "SHT45 soft reset failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+    
+    // Wait for reset to complete
+    vTaskDelay(pdMS_TO_TICKS(SHT45_RESET_TIME_MS));
+    
+    // Read serial number to verify communication
+    uint8_t serial_cmd = SHT45_CMD_READ_SERIAL;
+    ret = i2c_master_write_to_device(AERIS_I2C_NUM, SHT45_I2C_ADDR,
+                                     &serial_cmd, 1, pdMS_TO_TICKS(1000));
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "SHT45 read serial command failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+    
+    vTaskDelay(pdMS_TO_TICKS(1));
+    
+    // Read 6 bytes (2 bytes serial + CRC, 2 bytes serial + CRC)
+    uint8_t serial_data[6];
+    ret = i2c_master_read_from_device(AERIS_I2C_NUM, SHT45_I2C_ADDR,
+                                      serial_data, 6, pdMS_TO_TICKS(1000));
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "SHT45 read serial data failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+    
+    // Verify CRC for both words
+    uint8_t crc1 = sensirion_crc8(&serial_data[0], 2);
+    uint8_t crc2 = sensirion_crc8(&serial_data[3], 2);
+    if (crc1 != serial_data[2] || crc2 != serial_data[5]) {
+        ESP_LOGE(TAG, "SHT45 serial number CRC mismatch");
+        return ESP_ERR_INVALID_CRC;
+    }
+    
+    // Store serial number
+    sht45_serial_number = ((uint32_t)serial_data[0] << 24) | 
+                          ((uint32_t)serial_data[1] << 16) |
+                          ((uint32_t)serial_data[3] << 8) | 
+                          serial_data[4];
+    
+    ESP_LOGI(TAG, "SHT45 initialized successfully. Serial: 0x%08lX", sht45_serial_number);
+    sht45_initialized = true;
+    
+    return ESP_OK;
+}
+
+/**
+ * @brief Read temperature and humidity from SHT45
+ */
+static esp_err_t sht45_read_temp_humidity(float *temp_c, float *humidity_percent)
+{
+    if (!sht45_initialized) {
+        ESP_LOGE(TAG, "SHT45 not initialized");
+        return ESP_ERR_INVALID_STATE;
+    }
+    
+    // Send measurement command (high repeatability)
+    uint8_t measure_cmd = SHT45_CMD_MEASURE_HIGH;
+    esp_err_t ret = i2c_master_write_to_device(AERIS_I2C_NUM, SHT45_I2C_ADDR,
+                                                &measure_cmd, 1, pdMS_TO_TICKS(1000));
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "SHT45 measure command failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+    
+    // Wait for measurement to complete
+    vTaskDelay(pdMS_TO_TICKS(SHT45_MEASURE_TIME_MS));
+    
+    // Read 6 bytes (2 temp + CRC, 2 RH + CRC)
+    uint8_t data[6];
+    ret = i2c_master_read_from_device(AERIS_I2C_NUM, SHT45_I2C_ADDR,
+                                      data, 6, pdMS_TO_TICKS(1000));
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "SHT45 read measurement failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+    
+    // Verify CRC for both words
+    uint8_t temp_crc = sensirion_crc8(&data[0], 2);
+    uint8_t rh_crc = sensirion_crc8(&data[3], 2);
+    if (temp_crc != data[2] || rh_crc != data[5]) {
+        ESP_LOGE(TAG, "SHT45 measurement CRC mismatch");
+        return ESP_ERR_INVALID_CRC;
+    }
+    
+    // Convert raw values to temperature and humidity
+    uint16_t temp_raw = (data[0] << 8) | data[1];
+    uint16_t rh_raw = (data[3] << 8) | data[4];
+    
+    // SHT45 conversion formulas from datasheet
+    *temp_c = -45.0f + 175.0f * ((float)temp_raw / 65535.0f);
+    *humidity_percent = -6.0f + 125.0f * ((float)rh_raw / 65535.0f);
+    
+    // Clamp humidity to valid range
+    if (*humidity_percent < 0.0f) *humidity_percent = 0.0f;
+    if (*humidity_percent > 100.0f) *humidity_percent = 100.0f;
+    
+    return ESP_OK;
+}
+
+/**
+ * @brief Calculate CRC8 for SGP41 (polynomial 0x31, init 0xFF)
+ */
+static uint8_t sgp41_crc8(const uint8_t *data, size_t len)
+{
+    return sensirion_crc8(data, len);
 }
 
 /**
@@ -575,6 +709,13 @@ esp_err_t aeris_driver_init(void)
         ESP_LOGE(TAG, "Failed to initialize I2C: %s", esp_err_to_name(ret));
         // Continue anyway - PM sensor uses UART
     } else {
+        // Initialize SHT45 temperature/humidity sensor
+        ret = sht45_init();
+        if (ret != ESP_OK) {
+            ESP_LOGW(TAG, "Failed to initialize SHT45: %s", esp_err_to_name(ret));
+            ESP_LOGW(TAG, "Continuing without temperature/humidity sensor");
+        }
+        
         // Initialize LPS22HB pressure sensor
         ret = lps22hb_init();
         if (ret != ESP_OK) {
@@ -605,11 +746,9 @@ esp_err_t aeris_driver_init(void)
     }
     
     // TODO: Initialize other sensors here
-    // - Temperature/Humidity sensor (e.g., SHT4x, BME280)
     // - CO2 sensor (e.g., SCD40, SCD41)
     
     ESP_LOGI(TAG, "Aeris driver initialized successfully");
-    ESP_LOGW(TAG, "Note: Some I2C sensors still need implementation");
     
     return ESP_OK;
 }
@@ -636,11 +775,25 @@ esp_err_t aeris_read_temp_humidity(float *temp_c, float *humidity)
         return ESP_ERR_INVALID_ARG;
     }
     
-    // TODO: Implement actual sensor reading
-    // Example for SHT4x or BME280
+    // Read from SHT45 sensor
+    if (!sht45_initialized) {
+        ESP_LOGW(TAG, "SHT45 not initialized, returning cached values");
+        *temp_c = current_state.temperature_c;
+        *humidity = current_state.humidity_percent;
+        return ESP_ERR_INVALID_STATE;
+    }
     
-    *temp_c = current_state.temperature_c;
-    *humidity = current_state.humidity_percent;
+    esp_err_t ret = sht45_read_temp_humidity(temp_c, humidity);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to read SHT45: %s", esp_err_to_name(ret));
+        *temp_c = current_state.temperature_c;
+        *humidity = current_state.humidity_percent;
+        return ret;
+    }
+    
+    // Update current state
+    current_state.temperature_c = *temp_c;
+    current_state.humidity_percent = *humidity;
     
     ESP_LOGD(TAG, "Temp: %.2f°C, Humidity: %.2f%%", *temp_c, *humidity);
     return ESP_OK;
