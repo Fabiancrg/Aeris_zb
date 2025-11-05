@@ -1,7 +1,7 @@
 /*
  * RGB LED Indicator Driver (SK6812)
  * Provides visual feedback for air quality sensor readings
- * 4 separate LEDs: CO2, VOC, PM2.5, Humidity
+ * 5 separate LEDs: CO2, VOC, NOx, PM2.5, Humidity
  */
 
 #ifndef LED_INDICATOR_H
@@ -15,6 +15,7 @@
 typedef enum {
     LED_ID_CO2 = 0,
     LED_ID_VOC,
+    LED_ID_NOX,
     LED_ID_PM25,
     LED_ID_HUMIDITY,
     LED_ID_MAX
@@ -36,6 +37,10 @@ typedef struct {
     uint16_t voc_orange;    // Warning threshold (default: 150)
     uint16_t voc_red;       // Danger threshold (default: 250)
     
+    // NOx Index thresholds (1-500 scale)
+    uint16_t nox_orange;    // Warning threshold (default: 150)
+    uint16_t nox_red;       // Danger threshold (default: 250)
+    
     // CO2 thresholds (ppm)
     uint16_t co2_orange;    // Warning threshold (default: 1000 ppm)
     uint16_t co2_red;       // Danger threshold (default: 1500 ppm)
@@ -54,6 +59,7 @@ typedef struct {
 /* Sensor data for LED evaluation */
 typedef struct {
     uint16_t voc_index;
+    uint16_t nox_index;
     uint16_t co2_ppm;
     float humidity_percent;
     float pm25_ug_m3;

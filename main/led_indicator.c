@@ -1,6 +1,6 @@
 /*
  * RGB LED Indicator Driver Implementation (SK6812)
- * Controls 4 separate LEDs for CO2, VOC, PM2.5, and Humidity monitoring
+ * Controls 5 separate LEDs for CO2, VOC, NOx, PM2.5, and Humidity monitoring
  */
 
 #include "led_indicator.h"
@@ -27,6 +27,7 @@ static const char *TAG = "LED_INDICATOR";
 static const gpio_num_t LED_GPIO_MAP[LED_ID_MAX] = {
     [LED_ID_CO2] = LED_CO2_GPIO,
     [LED_ID_VOC] = LED_VOC_GPIO,
+    [LED_ID_NOX] = LED_NOX_GPIO,
     [LED_ID_PM25] = LED_PM25_GPIO,
     [LED_ID_HUMIDITY] = LED_HUM_GPIO,
 };
@@ -35,6 +36,7 @@ static const gpio_num_t LED_GPIO_MAP[LED_ID_MAX] = {
 static const char* LED_NAMES[LED_ID_MAX] = {
     [LED_ID_CO2] = "CO2",
     [LED_ID_VOC] = "VOC",
+    [LED_ID_NOX] = "NOx",
     [LED_ID_PM25] = "PM2.5",
     [LED_ID_HUMIDITY] = "Humidity",
 };
@@ -44,6 +46,8 @@ static led_thresholds_t s_thresholds = {
     .enabled = true,
     .voc_orange = 150,
     .voc_red = 250,
+    .nox_orange = 150,
+    .nox_red = 250,
     .co2_orange = 1000,
     .co2_red = 1500,
     .humidity_orange_low = 30,
@@ -59,7 +63,7 @@ static rmt_channel_handle_t s_led_channels[LED_ID_MAX] = {NULL};
 static rmt_encoder_handle_t s_led_encoder = NULL;
 
 /* LED state tracking */
-static led_color_t s_current_colors[LED_ID_MAX] = {LED_COLOR_OFF, LED_COLOR_OFF, LED_COLOR_OFF, LED_COLOR_OFF};
+static led_color_t s_current_colors[LED_ID_MAX] = {LED_COLOR_OFF, LED_COLOR_OFF, LED_COLOR_OFF, LED_COLOR_OFF, LED_COLOR_OFF};
 
 /* RGB color values (GRB order for SK6812) */
 typedef struct {
@@ -330,6 +334,17 @@ static led_color_t evaluate_voc(uint16_t voc_index)
     }
 }
 
+static led_color_t evaluate_nox(uint16_t nox_index)
+{
+    if (nox_index >= s_thresholds.nox_red) {
+        return LED_COLOR_RED;
+    } else if (nox_index >= s_thresholds.nox_orange) {
+        return LED_COLOR_ORANGE;
+    } else {
+        return LED_COLOR_GREEN;
+    }
+}
+
 static led_color_t evaluate_co2(uint16_t co2_ppm)
 {
     if (co2_ppm >= s_thresholds.co2_red) {
@@ -383,6 +398,7 @@ esp_err_t led_update_from_sensors(const led_sensor_data_t *sensor_data)
     
     // Evaluate each sensor independently and update its LED
     led_color_t voc_color = evaluate_voc(sensor_data->voc_index);
+    led_color_t nox_color = evaluate_nox(sensor_data->nox_index);
     led_color_t co2_color = evaluate_co2(sensor_data->co2_ppm);
     led_color_t humidity_color = evaluate_humidity(sensor_data->humidity_percent);
     led_color_t pm25_color = evaluate_pm25(sensor_data->pm25_ug_m3);
@@ -394,6 +410,15 @@ esp_err_t led_update_from_sensors(const led_sensor_data_t *sensor_data)
                  voc_color == LED_COLOR_ORANGE ? "ORANGE" : "RED",
                  sensor_data->voc_index);
         led_set_color(LED_ID_VOC, voc_color);
+    }
+    
+    // Update NOx LED
+    if (nox_color != s_current_colors[LED_ID_NOX]) {
+        ESP_LOGI(TAG, "NOx LED: %s (index: %d)", 
+                 nox_color == LED_COLOR_GREEN ? "GREEN" : 
+                 nox_color == LED_COLOR_ORANGE ? "ORANGE" : "RED",
+                 sensor_data->nox_index);
+        led_set_color(LED_ID_NOX, nox_color);
     }
     
     // Update CO2 LED

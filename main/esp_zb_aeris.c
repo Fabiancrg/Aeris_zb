@@ -303,6 +303,14 @@ static esp_err_t zb_attribute_handler(const esp_zb_zcl_set_attr_value_message_t 
                     thresholds.voc_red = value;
                     ESP_LOGI(TAG, "VOC red threshold: %d", value);
                     break;
+                case ZCL_LED_ATTR_NOX_ORANGE:
+                    thresholds.nox_orange = value;
+                    ESP_LOGI(TAG, "NOx orange threshold: %d", value);
+                    break;
+                case ZCL_LED_ATTR_NOX_RED:
+                    thresholds.nox_red = value;
+                    ESP_LOGI(TAG, "NOx red threshold: %d", value);
+                    break;
                 case ZCL_LED_ATTR_CO2_ORANGE:
                     thresholds.co2_orange = value;
                     ESP_LOGI(TAG, "CO2 orange threshold: %d ppm", value);
@@ -436,6 +444,7 @@ static void sensor_update_zigbee_attributes(uint8_t param)
     /* Update LED based on sensor readings */
     led_sensor_data_t led_data = {
         .voc_index = state.voc_index,
+        .nox_index = state.nox_index,
         .co2_ppm = state.co2_ppm,
         .humidity_percent = state.humidity_percent,
         .pm25_ug_m3 = state.pm2_5_ug_m3,
@@ -706,6 +715,8 @@ static void esp_zb_task(void *pvParameters)
     /* Add threshold attributes (all uint16_t) */
     uint16_t voc_orange_default = 150;
     uint16_t voc_red_default = 250;
+    uint16_t nox_orange_default = 150;
+    uint16_t nox_red_default = 250;
     uint16_t co2_orange_default = 1000;
     uint16_t co2_red_default = 1500;
     uint16_t hum_orange_low_default = 30;
@@ -717,6 +728,8 @@ static void esp_zb_task(void *pvParameters)
     
     esp_zb_analog_output_cluster_add_attr(led_config_cluster, ZCL_LED_ATTR_VOC_ORANGE, &voc_orange_default);
     esp_zb_analog_output_cluster_add_attr(led_config_cluster, ZCL_LED_ATTR_VOC_RED, &voc_red_default);
+    esp_zb_analog_output_cluster_add_attr(led_config_cluster, ZCL_LED_ATTR_NOX_ORANGE, &nox_orange_default);
+    esp_zb_analog_output_cluster_add_attr(led_config_cluster, ZCL_LED_ATTR_NOX_RED, &nox_red_default);
     esp_zb_analog_output_cluster_add_attr(led_config_cluster, ZCL_LED_ATTR_CO2_ORANGE, &co2_orange_default);
     esp_zb_analog_output_cluster_add_attr(led_config_cluster, ZCL_LED_ATTR_CO2_RED, &co2_red_default);
     esp_zb_analog_output_cluster_add_attr(led_config_cluster, ZCL_LED_ATTR_HUM_ORANGE_LOW, &hum_orange_low_default);
