@@ -316,19 +316,31 @@ static void sensor_update_zigbee_attributes(uint8_t param)
                                   ESP_ZB_ZCL_CLUSTER_SERVER_ROLE, ESP_ZB_ZCL_ATTR_PRESSURE_MEASUREMENT_VALUE_ID,
                                   &pressure_zigbee, false);
     
-    /* Update Endpoint 3: PM2.5 (primary PM value) */
+    /* Update Endpoint 3: PM1.0 */
+    float pm1_value = state.pm1_0_ug_m3;
+    esp_zb_zcl_set_attribute_val(HA_ESP_PM1_ENDPOINT, ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT,
+                                  ESP_ZB_ZCL_CLUSTER_SERVER_ROLE, ESP_ZB_ZCL_ATTR_ANALOG_INPUT_PRESENT_VALUE_ID,
+                                  &pm1_value, false);
+    
+    /* Update Endpoint 4: PM2.5 */
     float pm25_value = state.pm2_5_ug_m3;
-    esp_zb_zcl_set_attribute_val(HA_ESP_PM_ENDPOINT, ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT,
+    esp_zb_zcl_set_attribute_val(HA_ESP_PM25_ENDPOINT, ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT,
                                   ESP_ZB_ZCL_CLUSTER_SERVER_ROLE, ESP_ZB_ZCL_ATTR_ANALOG_INPUT_PRESENT_VALUE_ID,
                                   &pm25_value, false);
     
-    /* Update Endpoint 4: VOC Index */
+    /* Update Endpoint 5: PM10 */
+    float pm10_value = state.pm10_ug_m3;
+    esp_zb_zcl_set_attribute_val(HA_ESP_PM10_ENDPOINT, ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT,
+                                  ESP_ZB_ZCL_CLUSTER_SERVER_ROLE, ESP_ZB_ZCL_ATTR_ANALOG_INPUT_PRESENT_VALUE_ID,
+                                  &pm10_value, false);
+    
+    /* Update Endpoint 6: VOC Index */
     float voc_value = (float)state.voc_index;
     esp_zb_zcl_set_attribute_val(HA_ESP_VOC_ENDPOINT, ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT,
                                   ESP_ZB_ZCL_CLUSTER_SERVER_ROLE, ESP_ZB_ZCL_ATTR_ANALOG_INPUT_PRESENT_VALUE_ID,
                                   &voc_value, false);
     
-    /* Update Endpoint 5: CO2 */
+    /* Update Endpoint 7: CO2 */
     float co2_value = (float)state.co2_ppm;
     esp_zb_zcl_set_attribute_val(HA_ESP_CO2_ENDPOINT, ESP_ZB_ZCL_CLUSTER_ID_CARBON_DIOXIDE_MEASUREMENT,
                                   ESP_ZB_ZCL_CLUSTER_SERVER_ROLE, ESP_ZB_ZCL_ATTR_CARBON_DIOXIDE_MEASUREMENT_MEASURED_VALUE_ID,
@@ -417,34 +429,87 @@ static void esp_zb_task(void *pvParameters)
     };
     esp_zb_ep_list_add_ep(ep_list, pressure_clusters, endpoint2_config);
     
-    /* Endpoint 3: PM sensors (PM1.0, PM2.5, PM10) - using Analog Input clusters */
-    esp_zb_cluster_list_t *pm_clusters = esp_zb_zcl_cluster_list_create();
+    /* Endpoint 3: PM1.0 - using Analog Input cluster */
+    esp_zb_cluster_list_t *pm1_clusters = esp_zb_zcl_cluster_list_create();
     
-    esp_zb_basic_cluster_cfg_t basic_pm_cfg = {
+    esp_zb_basic_cluster_cfg_t basic_pm1_cfg = {
         .zcl_version = ESP_ZB_ZCL_BASIC_ZCL_VERSION_DEFAULT_VALUE,
         .power_source = ESP_ZB_ZCL_BASIC_POWER_SOURCE_DEFAULT_VALUE,
     };
-    ESP_ERROR_CHECK(esp_zb_cluster_list_add_basic_cluster(pm_clusters, esp_zb_basic_cluster_create(&basic_pm_cfg), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
+    ESP_ERROR_CHECK(esp_zb_cluster_list_add_basic_cluster(pm1_clusters, esp_zb_basic_cluster_create(&basic_pm1_cfg), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
     
-    /* PM2.5 as primary analog input */
+    esp_zb_analog_input_cluster_cfg_t pm1_cfg = {
+        .present_value = 0.0f,
+    };
+    esp_zb_attribute_list_t *pm1_cluster = esp_zb_analog_input_cluster_create(&pm1_cfg);
+    char pm1_desc[] = "\x0B""PM1.0 µg/m³";
+    esp_zb_analog_input_cluster_add_attr(pm1_cluster, ESP_ZB_ZCL_ATTR_ANALOG_INPUT_DESCRIPTION_ID, pm1_desc);
+    ESP_ERROR_CHECK(esp_zb_cluster_list_add_analog_input_cluster(pm1_clusters, pm1_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
+    ESP_ERROR_CHECK(esp_zb_cluster_list_add_identify_cluster(pm1_clusters, esp_zb_identify_cluster_create(NULL), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
+    
+    esp_zb_endpoint_config_t endpoint3_config = {
+        .endpoint = HA_ESP_PM1_ENDPOINT,
+        .app_profile_id = ESP_ZB_AF_HA_PROFILE_ID,
+        .app_device_id = ESP_ZB_HA_SIMPLE_SENSOR_DEVICE_ID,
+        .app_device_version = 0
+    };
+    esp_zb_ep_list_add_ep(ep_list, pm1_clusters, endpoint3_config);
+    
+    /* Endpoint 4: PM2.5 - using Analog Input cluster */
+    esp_zb_cluster_list_t *pm25_clusters = esp_zb_zcl_cluster_list_create();
+    
+    esp_zb_basic_cluster_cfg_t basic_pm25_cfg = {
+        .zcl_version = ESP_ZB_ZCL_BASIC_ZCL_VERSION_DEFAULT_VALUE,
+        .power_source = ESP_ZB_ZCL_BASIC_POWER_SOURCE_DEFAULT_VALUE,
+    };
+    ESP_ERROR_CHECK(esp_zb_cluster_list_add_basic_cluster(pm25_clusters, esp_zb_basic_cluster_create(&basic_pm25_cfg), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
+    
     esp_zb_analog_input_cluster_cfg_t pm25_cfg = {
         .present_value = 0.0f,
     };
     esp_zb_attribute_list_t *pm25_cluster = esp_zb_analog_input_cluster_create(&pm25_cfg);
     char pm25_desc[] = "\x0C""PM2.5 µg/m³";
     esp_zb_analog_input_cluster_add_attr(pm25_cluster, ESP_ZB_ZCL_ATTR_ANALOG_INPUT_DESCRIPTION_ID, pm25_desc);
-    ESP_ERROR_CHECK(esp_zb_cluster_list_add_analog_input_cluster(pm_clusters, pm25_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
-    ESP_ERROR_CHECK(esp_zb_cluster_list_add_identify_cluster(pm_clusters, esp_zb_identify_cluster_create(NULL), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
+    ESP_ERROR_CHECK(esp_zb_cluster_list_add_analog_input_cluster(pm25_clusters, pm25_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
+    ESP_ERROR_CHECK(esp_zb_cluster_list_add_identify_cluster(pm25_clusters, esp_zb_identify_cluster_create(NULL), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
     
-    esp_zb_endpoint_config_t endpoint3_config = {
-        .endpoint = HA_ESP_PM_ENDPOINT,
+    esp_zb_endpoint_config_t endpoint4_config = {
+        .endpoint = HA_ESP_PM25_ENDPOINT,
         .app_profile_id = ESP_ZB_AF_HA_PROFILE_ID,
         .app_device_id = ESP_ZB_HA_SIMPLE_SENSOR_DEVICE_ID,
         .app_device_version = 0
     };
-    esp_zb_ep_list_add_ep(ep_list, pm_clusters, endpoint3_config);
+    esp_zb_ep_list_add_ep(ep_list, pm25_clusters, endpoint4_config);
     
-    /* Endpoint 4: VOC Index - using Analog Input cluster */
+    /* Endpoint 5: PM10 - using Analog Input cluster */
+    esp_zb_cluster_list_t *pm10_clusters = esp_zb_zcl_cluster_list_create();
+    
+    esp_zb_basic_cluster_cfg_t basic_pm10_cfg = {
+        .zcl_version = ESP_ZB_ZCL_BASIC_ZCL_VERSION_DEFAULT_VALUE,
+        .power_source = ESP_ZB_ZCL_BASIC_POWER_SOURCE_DEFAULT_VALUE,
+    };
+    ESP_ERROR_CHECK(esp_zb_cluster_list_add_basic_cluster(pm10_clusters, esp_zb_basic_cluster_create(&basic_pm10_cfg), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
+    
+    esp_zb_analog_input_cluster_cfg_t pm10_cfg = {
+        .present_value = 0.0f,
+    };
+    esp_zb_attribute_list_t *pm10_cluster = esp_zb_analog_input_cluster_create(&pm10_cfg);
+    char pm10_desc[] = "\x0B""PM10 µg/m³";
+    esp_zb_analog_input_cluster_add_attr(pm10_cluster, ESP_ZB_ZCL_ATTR_ANALOG_INPUT_DESCRIPTION_ID, pm10_desc);
+    ESP_ERROR_CHECK(esp_zb_cluster_list_add_analog_input_cluster(pm10_clusters, pm10_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
+    ESP_ERROR_CHECK(esp_zb_cluster_list_add_identify_cluster(pm10_clusters, esp_zb_identify_cluster_create(NULL), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
+    
+    esp_zb_endpoint_config_t endpoint5_config = {
+        .endpoint = HA_ESP_PM10_ENDPOINT,
+        .app_profile_id = ESP_ZB_AF_HA_PROFILE_ID,
+        .app_device_id = ESP_ZB_HA_SIMPLE_SENSOR_DEVICE_ID,
+        .app_device_version = 0
+    };
+    esp_zb_ep_list_add_ep(ep_list, pm10_clusters, endpoint5_config);
+    
+    esp_zb_ep_list_add_ep(ep_list, pm10_clusters, endpoint5_config);
+    
+    /* Endpoint 6: VOC Index - using Analog Input cluster */
     esp_zb_cluster_list_t *voc_clusters = esp_zb_zcl_cluster_list_create();
     
     esp_zb_basic_cluster_cfg_t basic_voc_cfg = {
@@ -462,15 +527,17 @@ static void esp_zb_task(void *pvParameters)
     ESP_ERROR_CHECK(esp_zb_cluster_list_add_analog_input_cluster(voc_clusters, voc_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
     ESP_ERROR_CHECK(esp_zb_cluster_list_add_identify_cluster(voc_clusters, esp_zb_identify_cluster_create(NULL), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
     
-    esp_zb_endpoint_config_t endpoint4_config = {
+    esp_zb_endpoint_config_t endpoint6_config = {
         .endpoint = HA_ESP_VOC_ENDPOINT,
         .app_profile_id = ESP_ZB_AF_HA_PROFILE_ID,
         .app_device_id = ESP_ZB_HA_SIMPLE_SENSOR_DEVICE_ID,
         .app_device_version = 0
     };
-    esp_zb_ep_list_add_ep(ep_list, voc_clusters, endpoint4_config);
+    esp_zb_ep_list_add_ep(ep_list, voc_clusters, endpoint6_config);
     
-    /* Endpoint 5: CO2 - using Carbon Dioxide Measurement cluster */
+    esp_zb_ep_list_add_ep(ep_list, voc_clusters, endpoint6_config);
+    
+    /* Endpoint 7: CO2 - using Carbon Dioxide Measurement cluster */
     esp_zb_cluster_list_t *co2_clusters = esp_zb_zcl_cluster_list_create();
     
     esp_zb_basic_cluster_cfg_t basic_co2_cfg = {
@@ -488,13 +555,13 @@ static void esp_zb_task(void *pvParameters)
     ESP_ERROR_CHECK(esp_zb_cluster_list_add_carbon_dioxide_measurement_cluster(co2_clusters, esp_zb_carbon_dioxide_measurement_cluster_create(&co2_cfg), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
     ESP_ERROR_CHECK(esp_zb_cluster_list_add_identify_cluster(co2_clusters, esp_zb_identify_cluster_create(NULL), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
     
-    esp_zb_endpoint_config_t endpoint5_config = {
+    esp_zb_endpoint_config_t endpoint7_config = {
         .endpoint = HA_ESP_CO2_ENDPOINT,
         .app_profile_id = ESP_ZB_AF_HA_PROFILE_ID,
         .app_device_id = ESP_ZB_HA_SIMPLE_SENSOR_DEVICE_ID,
         .app_device_version = 0
     };
-    esp_zb_ep_list_add_ep(ep_list, co2_clusters, endpoint5_config);
+    esp_zb_ep_list_add_ep(ep_list, co2_clusters, endpoint7_config);
     
     /* Register the device */
     esp_zb_device_register(ep_list);

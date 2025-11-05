@@ -17,9 +17,11 @@
 /* Air Quality Sensor Endpoints */
 #define HA_ESP_TEMP_HUM_ENDPOINT        1                                    /* Temperature and Humidity sensor endpoint */
 #define HA_ESP_PRESSURE_ENDPOINT        2                                    /* Pressure sensor endpoint */
-#define HA_ESP_PM_ENDPOINT              3                                    /* Particulate Matter (PM) sensor endpoint */
-#define HA_ESP_VOC_ENDPOINT             4                                    /* VOC Index sensor endpoint */
-#define HA_ESP_CO2_ENDPOINT             5                                    /* CO2 sensor endpoint */
+#define HA_ESP_PM1_ENDPOINT             3                                    /* PM1.0 sensor endpoint */
+#define HA_ESP_PM25_ENDPOINT            4                                    /* PM2.5 sensor endpoint */
+#define HA_ESP_PM10_ENDPOINT            5                                    /* PM10 sensor endpoint */
+#define HA_ESP_VOC_ENDPOINT             6                                    /* VOC Index sensor endpoint */
+#define HA_ESP_CO2_ENDPOINT             7                                    /* CO2 sensor endpoint */
 
 #define ESP_ZB_PRIMARY_CHANNEL_MASK     ESP_ZB_TRANSCEIVER_ALL_CHANNELS_MASK /* Zigbee primary channel mask use in the example */
 
