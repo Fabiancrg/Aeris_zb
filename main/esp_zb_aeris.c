@@ -378,7 +378,7 @@ static void sensor_update_zigbee_attributes(uint8_t param)
     ESP_LOGI(TAG, "  Pressure: %.2fhPa", state.pressure_hpa);
     ESP_LOGI(TAG, "  PM1.0: %.2f, PM2.5: %.2f, PM10: %.2f µg/m³", 
              state.pm1_0_ug_m3, state.pm2_5_ug_m3, state.pm10_ug_m3);
-    ESP_LOGI(TAG, "  VOC Index: %d, CO2: %d ppm", state.voc_index, state.co2_ppm);
+    ESP_LOGI(TAG, "  VOC Index: %d, NOx Index: %d, CO2: %d ppm", state.voc_index, state.nox_index, state.co2_ppm);
     
     /* Update Endpoint 1: Temperature and Humidity */
     int16_t temp_zigbee = (int16_t)(state.temperature_c * 100);  // °C to 0.01°C
@@ -421,7 +421,13 @@ static void sensor_update_zigbee_attributes(uint8_t param)
                                   ESP_ZB_ZCL_CLUSTER_SERVER_ROLE, ESP_ZB_ZCL_ATTR_ANALOG_INPUT_PRESENT_VALUE_ID,
                                   &voc_value, false);
     
-    /* Update Endpoint 7: CO2 */
+    /* Update Endpoint 7: NOx Index */
+    float nox_value = (float)state.nox_index;
+    esp_zb_zcl_set_attribute_val(HA_ESP_NOX_ENDPOINT, ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT,
+                                  ESP_ZB_ZCL_CLUSTER_SERVER_ROLE, ESP_ZB_ZCL_ATTR_ANALOG_INPUT_PRESENT_VALUE_ID,
+                                  &nox_value, false);
+    
+    /* Update Endpoint 8: CO2 */
     float co2_value = (float)state.co2_ppm;
     esp_zb_zcl_set_attribute_val(HA_ESP_CO2_ENDPOINT, ESP_ZB_ZCL_CLUSTER_ID_CARBON_DIOXIDE_MEASUREMENT,
                                   ESP_ZB_ZCL_CLUSTER_SERVER_ROLE, ESP_ZB_ZCL_ATTR_CARBON_DIOXIDE_MEASUREMENT_MEASURED_VALUE_ID,
@@ -623,7 +629,33 @@ static void esp_zb_task(void *pvParameters)
     };
     esp_zb_ep_list_add_ep(ep_list, voc_clusters, endpoint6_config);
     
-    /* Endpoint 7: CO2 - using Carbon Dioxide Measurement cluster */
+    /* Endpoint 7: NOx Index - using Analog Input cluster */
+    esp_zb_cluster_list_t *nox_clusters = esp_zb_zcl_cluster_list_create();
+    
+    esp_zb_basic_cluster_cfg_t basic_nox_cfg = {
+        .zcl_version = ESP_ZB_ZCL_BASIC_ZCL_VERSION_DEFAULT_VALUE,
+        .power_source = ESP_ZB_ZCL_BASIC_POWER_SOURCE_DEFAULT_VALUE,
+    };
+    ESP_ERROR_CHECK(esp_zb_cluster_list_add_basic_cluster(nox_clusters, esp_zb_basic_cluster_create(&basic_nox_cfg), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
+    
+    esp_zb_analog_input_cluster_cfg_t nox_cfg = {
+        .present_value = 0.0f,
+    };
+    esp_zb_attribute_list_t *nox_cluster = esp_zb_analog_input_cluster_create(&nox_cfg);
+    char nox_desc[] = "\x09""NOx Index";
+    esp_zb_analog_input_cluster_add_attr(nox_cluster, ESP_ZB_ZCL_ATTR_ANALOG_INPUT_DESCRIPTION_ID, nox_desc);
+    ESP_ERROR_CHECK(esp_zb_cluster_list_add_analog_input_cluster(nox_clusters, nox_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
+    ESP_ERROR_CHECK(esp_zb_cluster_list_add_identify_cluster(nox_clusters, esp_zb_identify_cluster_create(NULL), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
+    
+    esp_zb_endpoint_config_t endpoint7_config = {
+        .endpoint = HA_ESP_NOX_ENDPOINT,
+        .app_profile_id = ESP_ZB_AF_HA_PROFILE_ID,
+        .app_device_id = ESP_ZB_HA_SIMPLE_SENSOR_DEVICE_ID,
+        .app_device_version = 0
+    };
+    esp_zb_ep_list_add_ep(ep_list, nox_clusters, endpoint7_config);
+    
+    /* Endpoint 8: CO2 - using Carbon Dioxide Measurement cluster */
     esp_zb_cluster_list_t *co2_clusters = esp_zb_zcl_cluster_list_create();
     
     esp_zb_basic_cluster_cfg_t basic_co2_cfg = {
@@ -641,15 +673,15 @@ static void esp_zb_task(void *pvParameters)
     ESP_ERROR_CHECK(esp_zb_cluster_list_add_carbon_dioxide_measurement_cluster(co2_clusters, esp_zb_carbon_dioxide_measurement_cluster_create(&co2_cfg), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
     ESP_ERROR_CHECK(esp_zb_cluster_list_add_identify_cluster(co2_clusters, esp_zb_identify_cluster_create(NULL), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
     
-    esp_zb_endpoint_config_t endpoint7_config = {
+    esp_zb_endpoint_config_t endpoint8_config = {
         .endpoint = HA_ESP_CO2_ENDPOINT,
         .app_profile_id = ESP_ZB_AF_HA_PROFILE_ID,
         .app_device_id = ESP_ZB_HA_SIMPLE_SENSOR_DEVICE_ID,
         .app_device_version = 0
     };
-    esp_zb_ep_list_add_ep(ep_list, co2_clusters, endpoint7_config);
+    esp_zb_ep_list_add_ep(ep_list, co2_clusters, endpoint8_config);
     
-    /* Endpoint 8: LED Configuration - using On/Off cluster + custom attributes */
+    /* Endpoint 9: LED Configuration */
     esp_zb_cluster_list_t *led_clusters = esp_zb_zcl_cluster_list_create();
     
     esp_zb_basic_cluster_cfg_t basic_led_cfg = {
@@ -697,13 +729,13 @@ static void esp_zb_task(void *pvParameters)
     ESP_ERROR_CHECK(esp_zb_cluster_list_add_analog_output_cluster(led_clusters, led_config_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
     ESP_ERROR_CHECK(esp_zb_cluster_list_add_identify_cluster(led_clusters, esp_zb_identify_cluster_create(NULL), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
     
-    esp_zb_endpoint_config_t endpoint8_config = {
+    esp_zb_endpoint_config_t endpoint9_config = {
         .endpoint = HA_ESP_LED_CONFIG_ENDPOINT,
         .app_profile_id = ESP_ZB_AF_HA_PROFILE_ID,
         .app_device_id = ESP_ZB_HA_ON_OFF_OUTPUT_DEVICE_ID,
         .app_device_version = 0
     };
-    esp_zb_ep_list_add_ep(ep_list, led_clusters, endpoint8_config);
+    esp_zb_ep_list_add_ep(ep_list, led_clusters, endpoint9_config);
     
     /* Register the device */
     esp_zb_device_register(ep_list);

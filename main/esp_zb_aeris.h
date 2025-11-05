@@ -21,8 +21,9 @@
 #define HA_ESP_PM25_ENDPOINT            4                                    /* PM2.5 sensor endpoint */
 #define HA_ESP_PM10_ENDPOINT            5                                    /* PM10 sensor endpoint */
 #define HA_ESP_VOC_ENDPOINT             6                                    /* VOC Index sensor endpoint */
-#define HA_ESP_CO2_ENDPOINT             7                                    /* CO2 sensor endpoint */
-#define HA_ESP_LED_CONFIG_ENDPOINT      8                                    /* LED configuration endpoint */
+#define HA_ESP_NOX_ENDPOINT             7                                    /* NOx Index sensor endpoint */
+#define HA_ESP_CO2_ENDPOINT             8                                    /* CO2 sensor endpoint */
+#define HA_ESP_LED_CONFIG_ENDPOINT      9                                    /* LED configuration endpoint */
 
 /* Custom attribute IDs for LED thresholds (manufacturer-specific range 0xF000-0xFFFF) */
 #define ZCL_LED_ATTR_VOC_ORANGE         0xF000
