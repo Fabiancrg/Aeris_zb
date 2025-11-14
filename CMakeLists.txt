@@ -7,7 +7,7 @@ include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 idf_build_set_property(MINIMAL_BUILD ON)
 
 # Version configuration
-set(PROJECT_VER "0.1")
+set(PROJECT_VER "1.0")
 set(BUILD_NUMBER 0)
 set(MANUFACTURER_CODE "0xFABC")
 set(IMAGE_TYPE "0x1100")

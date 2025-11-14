@@ -558,19 +558,7 @@ static void esp_zb_task(void *pvParameters)
     /* Create endpoint list */
     esp_zb_ep_list_t *ep_list = esp_zb_ep_list_create();
     
-    /* Endpoint 1: Temperature and Humidity */
-    esp_zb_temperature_meas_cluster_cfg_t temp_cfg = {
-        .measured_value = 0x8000,  // Invalid value (0x8000)
-        .min_value = 0x954D,       // -40°C in 0.01°C units
-        .max_value = 0x7FFF,       // Max valid value
-    };
-    
-    esp_zb_humidity_meas_cluster_cfg_t humidity_cfg = {
-        .measured_value = 0xFFFF,  // Invalid value
-        .min_value = 0,            // 0% RH
-        .max_value = 10000,        // 100% RH (in 0.01% units)
-    };
-    
+    /* Endpoint 1: Temperature and Humidity with REPORTING flag */
     esp_zb_cluster_list_t *temp_hum_clusters = esp_zb_zcl_cluster_list_create();
     
     /* Add Basic cluster */
@@ -581,12 +569,28 @@ static void esp_zb_task(void *pvParameters)
     esp_zb_attribute_list_t *basic_cluster = esp_zb_basic_cluster_create(&basic_cfg);
     ESP_ERROR_CHECK(esp_zb_cluster_list_add_basic_cluster(temp_hum_clusters, basic_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
     
-    /* Add Temperature measurement cluster */
-    esp_zb_attribute_list_t *temp_cluster = esp_zb_temperature_meas_cluster_create(&temp_cfg);
+    /* Add Temperature measurement cluster with REPORTING flag */
+    int16_t temp_value = 0x8000;  // Invalid value (0x8000)
+    int16_t temp_min = 0x954D;    // -40°C in 0.01°C units
+    int16_t temp_max = 0x7FFF;    // Max valid value
+    esp_zb_attribute_list_t *temp_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_TEMP_MEASUREMENT);
+    ESP_ERROR_CHECK(esp_zb_cluster_add_attr(temp_cluster, ESP_ZB_ZCL_CLUSTER_ID_TEMP_MEASUREMENT,
+                                            ESP_ZB_ZCL_ATTR_TEMP_MEASUREMENT_VALUE_ID, ESP_ZB_ZCL_ATTR_TYPE_S16,
+                                            ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING, &temp_value));
+    ESP_ERROR_CHECK(esp_zb_temperature_meas_cluster_add_attr(temp_cluster, ESP_ZB_ZCL_ATTR_TEMP_MEASUREMENT_MIN_VALUE_ID, &temp_min));
+    ESP_ERROR_CHECK(esp_zb_temperature_meas_cluster_add_attr(temp_cluster, ESP_ZB_ZCL_ATTR_TEMP_MEASUREMENT_MAX_VALUE_ID, &temp_max));
     ESP_ERROR_CHECK(esp_zb_cluster_list_add_temperature_meas_cluster(temp_hum_clusters, temp_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
     
-    /* Add Humidity measurement cluster */
-    esp_zb_attribute_list_t *humidity_cluster = esp_zb_humidity_meas_cluster_create(&humidity_cfg);
+    /* Add Humidity measurement cluster with REPORTING flag */
+    uint16_t hum_value = 0xFFFF;  // Invalid value
+    uint16_t hum_min = 0;         // 0% RH
+    uint16_t hum_max = 10000;     // 100% RH (in 0.01% units)
+    esp_zb_attribute_list_t *humidity_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_REL_HUMIDITY_MEASUREMENT);
+    ESP_ERROR_CHECK(esp_zb_cluster_add_attr(humidity_cluster, ESP_ZB_ZCL_CLUSTER_ID_REL_HUMIDITY_MEASUREMENT,
+                                            ESP_ZB_ZCL_ATTR_REL_HUMIDITY_MEASUREMENT_VALUE_ID, ESP_ZB_ZCL_ATTR_TYPE_U16,
+                                            ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING, &hum_value));
+    ESP_ERROR_CHECK(esp_zb_humidity_meas_cluster_add_attr(humidity_cluster, ESP_ZB_ZCL_ATTR_REL_HUMIDITY_MEASUREMENT_MIN_VALUE_ID, &hum_min));
+    ESP_ERROR_CHECK(esp_zb_humidity_meas_cluster_add_attr(humidity_cluster, ESP_ZB_ZCL_ATTR_REL_HUMIDITY_MEASUREMENT_MAX_VALUE_ID, &hum_max));
     ESP_ERROR_CHECK(esp_zb_cluster_list_add_humidity_meas_cluster(temp_hum_clusters, humidity_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
     
     /* Add Identify cluster */
@@ -600,11 +604,7 @@ static void esp_zb_task(void *pvParameters)
     };
     esp_zb_ep_list_add_ep(ep_list, temp_hum_clusters, endpoint1_config);
     
-    /* Endpoint 2: Pressure */
-    esp_zb_pressure_meas_cluster_cfg_t pressure_cfg = {
-        .measured_value = ESP_ZB_ZCL_ATTR_PRESSURE_MEASUREMENT_VALUE_UNKNOWN,
-    };
-    
+    /* Endpoint 2: Pressure with REPORTING flag */
     esp_zb_cluster_list_t *pressure_clusters = esp_zb_zcl_cluster_list_create();
     
     esp_zb_basic_cluster_cfg_t basic_pressure_cfg = {
@@ -612,7 +612,18 @@ static void esp_zb_task(void *pvParameters)
         .power_source = ESP_ZB_ZCL_BASIC_POWER_SOURCE_DEFAULT_VALUE,
     };
     ESP_ERROR_CHECK(esp_zb_cluster_list_add_basic_cluster(pressure_clusters, esp_zb_basic_cluster_create(&basic_pressure_cfg), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
-    ESP_ERROR_CHECK(esp_zb_cluster_list_add_pressure_meas_cluster(pressure_clusters, esp_zb_pressure_meas_cluster_create(&pressure_cfg), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
+    
+    /* Create Pressure measurement cluster with REPORTING flag */
+    int16_t pressure_value = ESP_ZB_ZCL_ATTR_PRESSURE_MEASUREMENT_VALUE_UNKNOWN;
+    int16_t pressure_min = 300 * 10;   // 300 hPa in 0.1 kPa units
+    int16_t pressure_max = 1100 * 10;  // 1100 hPa in 0.1 kPa units
+    esp_zb_attribute_list_t *pressure_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_PRESSURE_MEASUREMENT);
+    ESP_ERROR_CHECK(esp_zb_cluster_add_attr(pressure_cluster, ESP_ZB_ZCL_CLUSTER_ID_PRESSURE_MEASUREMENT,
+                                            ESP_ZB_ZCL_ATTR_PRESSURE_MEASUREMENT_VALUE_ID, ESP_ZB_ZCL_ATTR_TYPE_S16,
+                                            ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING, &pressure_value));
+    ESP_ERROR_CHECK(esp_zb_pressure_meas_cluster_add_attr(pressure_cluster, ESP_ZB_ZCL_ATTR_PRESSURE_MEASUREMENT_MIN_VALUE_ID, &pressure_min));
+    ESP_ERROR_CHECK(esp_zb_pressure_meas_cluster_add_attr(pressure_cluster, ESP_ZB_ZCL_ATTR_PRESSURE_MEASUREMENT_MAX_VALUE_ID, &pressure_max));
+    ESP_ERROR_CHECK(esp_zb_cluster_list_add_pressure_meas_cluster(pressure_clusters, pressure_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
     ESP_ERROR_CHECK(esp_zb_cluster_list_add_identify_cluster(pressure_clusters, esp_zb_identify_cluster_create(NULL), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
     
     esp_zb_endpoint_config_t endpoint2_config = {
@@ -623,7 +634,7 @@ static void esp_zb_task(void *pvParameters)
     };
     esp_zb_ep_list_add_ep(ep_list, pressure_clusters, endpoint2_config);
     
-    /* Endpoint 3: PM1.0 - using Analog Input cluster */
+    /* Endpoint 3: PM1.0 - using Analog Input cluster with REPORTING flag */
     esp_zb_cluster_list_t *pm1_clusters = esp_zb_zcl_cluster_list_create();
     
     esp_zb_basic_cluster_cfg_t basic_pm1_cfg = {
@@ -632,10 +643,12 @@ static void esp_zb_task(void *pvParameters)
     };
     ESP_ERROR_CHECK(esp_zb_cluster_list_add_basic_cluster(pm1_clusters, esp_zb_basic_cluster_create(&basic_pm1_cfg), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
     
-    esp_zb_analog_input_cluster_cfg_t pm1_cfg = {
-        .present_value = 0.0f,
-    };
-    esp_zb_attribute_list_t *pm1_cluster = esp_zb_analog_input_cluster_create(&pm1_cfg);
+    /* Create Analog Input cluster with REPORTING flag */
+    float pm1_present_value = 0.0f;
+    esp_zb_attribute_list_t *pm1_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT);
+    ESP_ERROR_CHECK(esp_zb_cluster_add_attr(pm1_cluster, ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT,
+                                            ESP_ZB_ZCL_ATTR_ANALOG_INPUT_PRESENT_VALUE_ID, ESP_ZB_ZCL_ATTR_TYPE_SINGLE,
+                                            ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING, &pm1_present_value));
     char pm1_desc[] = "\x0B""PM1.0 µg/m³";
     esp_zb_analog_input_cluster_add_attr(pm1_cluster, ESP_ZB_ZCL_ATTR_ANALOG_INPUT_DESCRIPTION_ID, pm1_desc);
     ESP_ERROR_CHECK(esp_zb_cluster_list_add_analog_input_cluster(pm1_clusters, pm1_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
@@ -649,7 +662,7 @@ static void esp_zb_task(void *pvParameters)
     };
     esp_zb_ep_list_add_ep(ep_list, pm1_clusters, endpoint3_config);
     
-    /* Endpoint 4: PM2.5 - using Analog Input cluster */
+    /* Endpoint 4: PM2.5 - using Analog Input cluster with REPORTING flag */
     esp_zb_cluster_list_t *pm25_clusters = esp_zb_zcl_cluster_list_create();
     
     esp_zb_basic_cluster_cfg_t basic_pm25_cfg = {
@@ -658,10 +671,12 @@ static void esp_zb_task(void *pvParameters)
     };
     ESP_ERROR_CHECK(esp_zb_cluster_list_add_basic_cluster(pm25_clusters, esp_zb_basic_cluster_create(&basic_pm25_cfg), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
     
-    esp_zb_analog_input_cluster_cfg_t pm25_cfg = {
-        .present_value = 0.0f,
-    };
-    esp_zb_attribute_list_t *pm25_cluster = esp_zb_analog_input_cluster_create(&pm25_cfg);
+    /* Create Analog Input cluster with REPORTING flag */
+    float pm25_present_value = 0.0f;
+    esp_zb_attribute_list_t *pm25_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT);
+    ESP_ERROR_CHECK(esp_zb_cluster_add_attr(pm25_cluster, ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT,
+                                            ESP_ZB_ZCL_ATTR_ANALOG_INPUT_PRESENT_VALUE_ID, ESP_ZB_ZCL_ATTR_TYPE_SINGLE,
+                                            ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING, &pm25_present_value));
     char pm25_desc[] = "\x0C""PM2.5 µg/m³";
     esp_zb_analog_input_cluster_add_attr(pm25_cluster, ESP_ZB_ZCL_ATTR_ANALOG_INPUT_DESCRIPTION_ID, pm25_desc);
     ESP_ERROR_CHECK(esp_zb_cluster_list_add_analog_input_cluster(pm25_clusters, pm25_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
@@ -675,7 +690,7 @@ static void esp_zb_task(void *pvParameters)
     };
     esp_zb_ep_list_add_ep(ep_list, pm25_clusters, endpoint4_config);
     
-    /* Endpoint 5: PM10 - using Analog Input cluster */
+    /* Endpoint 5: PM10 - using Analog Input cluster with REPORTING flag */
     esp_zb_cluster_list_t *pm10_clusters = esp_zb_zcl_cluster_list_create();
     
     esp_zb_basic_cluster_cfg_t basic_pm10_cfg = {
@@ -684,10 +699,12 @@ static void esp_zb_task(void *pvParameters)
     };
     ESP_ERROR_CHECK(esp_zb_cluster_list_add_basic_cluster(pm10_clusters, esp_zb_basic_cluster_create(&basic_pm10_cfg), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
     
-    esp_zb_analog_input_cluster_cfg_t pm10_cfg = {
-        .present_value = 0.0f,
-    };
-    esp_zb_attribute_list_t *pm10_cluster = esp_zb_analog_input_cluster_create(&pm10_cfg);
+    /* Create Analog Input cluster with REPORTING flag */
+    float pm10_present_value = 0.0f;
+    esp_zb_attribute_list_t *pm10_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT);
+    ESP_ERROR_CHECK(esp_zb_cluster_add_attr(pm10_cluster, ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT,
+                                            ESP_ZB_ZCL_ATTR_ANALOG_INPUT_PRESENT_VALUE_ID, ESP_ZB_ZCL_ATTR_TYPE_SINGLE,
+                                            ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING, &pm10_present_value));
     char pm10_desc[] = "\x0B""PM10 µg/m³";
     esp_zb_analog_input_cluster_add_attr(pm10_cluster, ESP_ZB_ZCL_ATTR_ANALOG_INPUT_DESCRIPTION_ID, pm10_desc);
     ESP_ERROR_CHECK(esp_zb_cluster_list_add_analog_input_cluster(pm10_clusters, pm10_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
@@ -701,7 +718,7 @@ static void esp_zb_task(void *pvParameters)
     };
     esp_zb_ep_list_add_ep(ep_list, pm10_clusters, endpoint5_config);
     
-    /* Endpoint 6: VOC Index - using Analog Input cluster */
+    /* Endpoint 6: VOC Index - using Analog Input cluster with REPORTING flag */
     esp_zb_cluster_list_t *voc_clusters = esp_zb_zcl_cluster_list_create();
     
     esp_zb_basic_cluster_cfg_t basic_voc_cfg = {
@@ -710,10 +727,12 @@ static void esp_zb_task(void *pvParameters)
     };
     ESP_ERROR_CHECK(esp_zb_cluster_list_add_basic_cluster(voc_clusters, esp_zb_basic_cluster_create(&basic_voc_cfg), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
     
-    esp_zb_analog_input_cluster_cfg_t voc_cfg = {
-        .present_value = 0.0f,
-    };
-    esp_zb_attribute_list_t *voc_cluster = esp_zb_analog_input_cluster_create(&voc_cfg);
+    /* Create Analog Input cluster with REPORTING flag */
+    float voc_present_value = 0.0f;
+    esp_zb_attribute_list_t *voc_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT);
+    ESP_ERROR_CHECK(esp_zb_cluster_add_attr(voc_cluster, ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT,
+                                            ESP_ZB_ZCL_ATTR_ANALOG_INPUT_PRESENT_VALUE_ID, ESP_ZB_ZCL_ATTR_TYPE_SINGLE,
+                                            ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING, &voc_present_value));
     char voc_desc[] = "\x09""VOC Index";
     esp_zb_analog_input_cluster_add_attr(voc_cluster, ESP_ZB_ZCL_ATTR_ANALOG_INPUT_DESCRIPTION_ID, voc_desc);
     ESP_ERROR_CHECK(esp_zb_cluster_list_add_analog_input_cluster(voc_clusters, voc_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
@@ -727,7 +746,7 @@ static void esp_zb_task(void *pvParameters)
     };
     esp_zb_ep_list_add_ep(ep_list, voc_clusters, endpoint6_config);
     
-    /* Endpoint 7: NOx Index - using Analog Input cluster */
+    /* Endpoint 7: NOx Index - using Analog Input cluster with REPORTING flag */
     esp_zb_cluster_list_t *nox_clusters = esp_zb_zcl_cluster_list_create();
     
     esp_zb_basic_cluster_cfg_t basic_nox_cfg = {
@@ -736,10 +755,12 @@ static void esp_zb_task(void *pvParameters)
     };
     ESP_ERROR_CHECK(esp_zb_cluster_list_add_basic_cluster(nox_clusters, esp_zb_basic_cluster_create(&basic_nox_cfg), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
     
-    esp_zb_analog_input_cluster_cfg_t nox_cfg = {
-        .present_value = 0.0f,
-    };
-    esp_zb_attribute_list_t *nox_cluster = esp_zb_analog_input_cluster_create(&nox_cfg);
+    /* Create Analog Input cluster with REPORTING flag */
+    float nox_present_value = 0.0f;
+    esp_zb_attribute_list_t *nox_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT);
+    ESP_ERROR_CHECK(esp_zb_cluster_add_attr(nox_cluster, ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT,
+                                            ESP_ZB_ZCL_ATTR_ANALOG_INPUT_PRESENT_VALUE_ID, ESP_ZB_ZCL_ATTR_TYPE_SINGLE,
+                                            ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING, &nox_present_value));
     char nox_desc[] = "\x09""NOx Index";
     esp_zb_analog_input_cluster_add_attr(nox_cluster, ESP_ZB_ZCL_ATTR_ANALOG_INPUT_DESCRIPTION_ID, nox_desc);
     ESP_ERROR_CHECK(esp_zb_cluster_list_add_analog_input_cluster(nox_clusters, nox_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
@@ -753,7 +774,7 @@ static void esp_zb_task(void *pvParameters)
     };
     esp_zb_ep_list_add_ep(ep_list, nox_clusters, endpoint7_config);
     
-    /* Endpoint 8: CO2 - using Carbon Dioxide Measurement cluster */
+    /* Endpoint 8: CO2 - using Carbon Dioxide Measurement cluster with REPORTING flag */
     esp_zb_cluster_list_t *co2_clusters = esp_zb_zcl_cluster_list_create();
     
     esp_zb_basic_cluster_cfg_t basic_co2_cfg = {
@@ -762,13 +783,17 @@ static void esp_zb_task(void *pvParameters)
     };
     ESP_ERROR_CHECK(esp_zb_cluster_list_add_basic_cluster(co2_clusters, esp_zb_basic_cluster_create(&basic_co2_cfg), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
     
-    /* CO2 measurement cluster */
-    esp_zb_carbon_dioxide_measurement_cluster_cfg_t co2_cfg = {
-        .measured_value = 0,
-        .min_measured_value = 400,   // 400 ppm
-        .max_measured_value = 5000,  // 5000 ppm
-    };
-    ESP_ERROR_CHECK(esp_zb_cluster_list_add_carbon_dioxide_measurement_cluster(co2_clusters, esp_zb_carbon_dioxide_measurement_cluster_create(&co2_cfg), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
+    /* CO2 measurement cluster with REPORTING flag */
+    float co2_measured_value = 0;
+    float co2_min_measured_value = 400;   // 400 ppm
+    float co2_max_measured_value = 5000;  // 5000 ppm
+    esp_zb_attribute_list_t *co2_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_CARBON_DIOXIDE_MEASUREMENT);
+    ESP_ERROR_CHECK(esp_zb_cluster_add_attr(co2_cluster, ESP_ZB_ZCL_CLUSTER_ID_CARBON_DIOXIDE_MEASUREMENT,
+                                            ESP_ZB_ZCL_ATTR_CARBON_DIOXIDE_MEASUREMENT_MEASURED_VALUE_ID, ESP_ZB_ZCL_ATTR_TYPE_SINGLE,
+                                            ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING, &co2_measured_value));
+    ESP_ERROR_CHECK(esp_zb_carbon_dioxide_measurement_cluster_add_attr(co2_cluster, ESP_ZB_ZCL_ATTR_CARBON_DIOXIDE_MEASUREMENT_MIN_MEASURED_VALUE_ID, &co2_min_measured_value));
+    ESP_ERROR_CHECK(esp_zb_carbon_dioxide_measurement_cluster_add_attr(co2_cluster, ESP_ZB_ZCL_ATTR_CARBON_DIOXIDE_MEASUREMENT_MAX_MEASURED_VALUE_ID, &co2_max_measured_value));
+    ESP_ERROR_CHECK(esp_zb_cluster_list_add_carbon_dioxide_measurement_cluster(co2_clusters, co2_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
     ESP_ERROR_CHECK(esp_zb_cluster_list_add_identify_cluster(co2_clusters, esp_zb_identify_cluster_create(NULL), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
     
     esp_zb_endpoint_config_t endpoint8_config = {
