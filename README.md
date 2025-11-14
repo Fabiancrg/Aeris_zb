@@ -643,24 +643,7 @@ The SGP41 currently uses a **simplified placeholder** for VOC/NOx index calculat
 - Requires learning period (~10 minutes for VOC, ~12 hours for NOx)
 - Handles baseline tracking and auto-calibration
 
-## Project History
-
-This project was adapted from an HVAC controller (ACW02-ZB). The following features were removed:
-
-- ❌ HVAC thermostat control
-- ❌ Fan speed control
-- ❌ Eco/Night/Swing modes
-- ❌ UART communication with HVAC unit
-
-All HVAC control logic has been replaced with air quality sensor reading functionality.
-
 ## Troubleshooting
-
-### Device won't join network
-- Check that Zigbee coordinator is in pairing mode
-- Verify ESP32-C6 is powered correctly
-- Check serial logs for error messages
-- Try factory reset (hold button during boot)
 
 ### Sensors not responding
 - **I2C sensors**:
@@ -689,53 +672,6 @@ All HVAC control logic has been replaced with air quality sensor reading functio
   - **Polling mode**: Wait up to interval + 35 seconds for readings (30s warm-up + 5s reading)
   - **Continuous mode**: Readings should update every second
   - Check "PMSA003A waking up" and "entering sleep mode" log messages in polling mode
-
-### Values not updating
-- Check that sensors are initialized correctly
-- Verify periodic read task is running
-- Check log output for sensor read errors
-- Ensure reporting is configured on Zigbee coordinator
-- **SCD40**: Wait at least 5 seconds for first measurement after initialization
-
-### RGB LEDs not working
-- **All air quality LEDs off or not lighting**:
-  - Check GPIO wiring for all 5 LEDs (GPIO21, 4, 8, 5, 10)
-  - Verify LED power supply (3.3V or 5V depending on SK6812 spec)
-  - Check serial logs for RMT initialization errors
-  - Ensure master switch is ON (endpoint 9, On/Off cluster)
-  - Verify LED enable mask is not 0x00 (check attribute 0xF00C)
-  - Look for "LED initialized" messages in logs
-- **Status LED not working**:
-  - Check GPIO23 wiring and connection
-  - Verify status LED is enabled (endpoint 10, On/Off cluster)
-  - Check logs for "Status LED: GREEN/ORANGE/RED" messages
-  - Should blink green/orange during join, solid green when connected
-  - Should show orange on startup, blink during pairing
-  - If always RED, check Zigbee coordinator availability
-  - If not blinking during join, check timer creation logs
-- **Some LEDs work, others don't**:
-  - Check individual GPIO connections
-  - Verify all 6 RMT channels initialized (check logs)
-  - Test each LED's GPIO pin continuity
-  - Check for damaged LEDs
-  - **Check LED enable mask** - specific LEDs may be disabled via bitmask
-    - Read attribute 0xF00C to see which LEDs are enabled
-    - Set to 0x1F (31) to enable all 5 air quality LEDs
-- **LEDs show wrong colors**:
-  - Verify sensor readings are accurate (check sensor endpoints)
-  - Review threshold configuration in Zigbee2MQTT
-  - Check logs for "LED: GREEN/ORANGE/RED" messages
-  - Default thresholds may not match your environment - adjust via endpoint 9
-- **Can't change LED thresholds**:
-  - Verify endpoint 9 is exposed in Zigbee2MQTT
-  - Check custom attribute IDs (0xF000-0xF00D) are mapped
-  - Try re-pairing device if attributes missing
-  - See [LED Configuration Guide](doc/LED_CONFIGURATION.md) for Z2M converter
-- **Individual LED control not working**:
-  - Ensure master switch (On/Off) is ON first
-  - Verify LED enable mask attribute (0xF00C) is being written correctly
-  - Check logs for "LED enable mask: 0x..." messages
-  - Remember: Master OFF overrides all individual settings
 
 **Power Note**: 6 LEDs (5 air quality + 1 status) at full brightness can draw ~360mA. Ensure adequate power supply (1A recommended).
 
