@@ -85,13 +85,19 @@ static void status_led_start_blink(void)
             NULL,
             status_led_blink_callback
         );
+        
+        if (status_led_blink_timer == NULL) {
+            ESP_LOGE(TAG, "[ERROR] Failed to create status LED blink timer");
+            return;
+        }
     }
     
-    if (status_led_blink_timer != NULL) {
-        status_led_blink_state = false;
-        led_set_status(LED_COLOR_ORANGE);
-        xTimerStart(status_led_blink_timer, 0);
+    status_led_blink_state = false;
+    led_set_status(LED_COLOR_ORANGE);
+    if (xTimerStart(status_led_blink_timer, 0) == pdPASS) {
         ESP_LOGI(TAG, "[STATUS_LED] Started join blink animation");
+    } else {
+        ESP_LOGE(TAG, "[ERROR] Failed to start status LED timer");
     }
 }
 
@@ -99,8 +105,9 @@ static void status_led_start_blink(void)
 static void status_led_stop_blink(void)
 {
     if (status_led_blink_timer != NULL) {
-        xTimerStop(status_led_blink_timer, 0);
-        ESP_LOGI(TAG, "[STATUS_LED] Stopped blink animation");
+        if (xTimerStop(status_led_blink_timer, 0) == pdPASS) {
+            ESP_LOGI(TAG, "[STATUS_LED] Stopped blink animation");
+        }
     }
 }
 
@@ -120,11 +127,15 @@ static void button_task(void *arg)
     TickType_t press_start_time = 0;
     bool long_press_triggered = false;
     const TickType_t LONG_PRESS_DURATION = pdMS_TO_TICKS(BUTTON_LONG_PRESS_TIME_MS);
+    const TickType_t DEBOUNCE_TIME = pdMS_TO_TICKS(50);  // 50ms debounce
     
     ESP_LOGI(TAG, "[BUTTON] Task started - waiting for button events");
     
     for (;;) {
         if (xQueueReceive(button_evt_queue, &io_num, portMAX_DELAY)) {
+            // Debounce
+            vTaskDelay(DEBOUNCE_TIME);
+            
             gpio_intr_disable(BOOT_BUTTON_GPIO);
             int button_level = gpio_get_level(BOOT_BUTTON_GPIO);
             
@@ -133,7 +144,11 @@ static void button_task(void *arg)
                 long_press_triggered = false;
                 ESP_LOGI(TAG, "[BUTTON] Pressed - hold 5 sec for factory reset");
                 
-                while (gpio_get_level(BOOT_BUTTON_GPIO) == 0) {
+                // Poll button state with timeout to prevent infinite loop
+                TickType_t poll_count = 0;
+                const TickType_t MAX_POLL_TIME = pdMS_TO_TICKS(10000);  // 10s max
+                
+                while (gpio_get_level(BOOT_BUTTON_GPIO) == 0 && poll_count < MAX_POLL_TIME) {
                     TickType_t current_time = xTaskGetTickCount();
                     if ((current_time - press_start_time) >= LONG_PRESS_DURATION && !long_press_triggered) {
                         long_press_triggered = true;
@@ -141,6 +156,7 @@ static void button_task(void *arg)
                         esp_zb_scheduler_alarm((esp_zb_callback_t)factory_reset_device, 0, 100);
                     }
                     vTaskDelay(pdMS_TO_TICKS(100));
+                    poll_count += pdMS_TO_TICKS(100);
                 }
                 
                 if (!long_press_triggered) {
@@ -149,6 +165,8 @@ static void button_task(void *arg)
                 }
             }
             
+            // Re-enable interrupt after debounce
+            vTaskDelay(DEBOUNCE_TIME);
             gpio_intr_enable(BOOT_BUTTON_GPIO);
         }
     }

@@ -912,26 +912,39 @@ static void pmsa003a_task(void *arg)
     
     ESP_LOGI(TAG, "PMSA003A read task started");
     
+    // Initialize uart_read_bytes return value check
+    memset(buffer, 0, sizeof(buffer));
+    
     // Start in sleep mode with default 5-minute polling
     pmsa003a_sleep();
     
     while (1) {
         // Check if we need to sleep the sensor after wake period
-        if (waiting_for_sleep && (xTaskGetTickCount() - wake_time) > pdMS_TO_TICKS(35000)) {
+        if (waiting_for_sleep && wake_time != 0 && 
+            (xTaskGetTickCount() - wake_time) > pdMS_TO_TICKS(35000)) {
             ESP_LOGI(TAG, "PMSA003A wake period complete, going to sleep");
             pmsa003a_sleep();
             waiting_for_sleep = false;
+            wake_time = 0;  // Reset for next cycle
         }
         
         // If sensor just woke up, track the time
         if (pmsa003a_current_mode == PMSA003A_MODE_ACTIVE && !waiting_for_sleep && wake_time == 0) {
             wake_time = xTaskGetTickCount();
             waiting_for_sleep = true;
+            ESP_LOGI(TAG, "PMSA003A starting wake period");
         }
         
-        // Read available data
+        // Read available data with safety check
+        size_t space_available = sizeof(buffer) - buffer_len;
+        if (space_available < 32) {
+            ESP_LOGW(TAG, "PMSA003A buffer nearly full, resetting");
+            buffer_len = 0;
+            space_available = sizeof(buffer);
+        }
+        
         int len = uart_read_bytes(PMSA003A_UART_NUM, buffer + buffer_len, 
-                                  sizeof(buffer) - buffer_len, pdMS_TO_TICKS(100));
+                                  space_available, pdMS_TO_TICKS(100));
         
         if (len > 0) {
             buffer_len += len;
@@ -966,11 +979,16 @@ static void pmsa003a_task(void *arg)
                 }
             }
             
-            // Prevent buffer overflow
+            // Prevent buffer overflow (should not happen with above check, but safety)
             if (buffer_len > sizeof(buffer) - 64) {
-                ESP_LOGW(TAG, "PMSA003A buffer overflow, resetting");
+                ESP_LOGW(TAG, "PMSA003A buffer unexpectedly full, resetting");
                 buffer_len = 0;
             }
+        } else if (len < 0) {
+            // UART error occurred
+            ESP_LOGE(TAG, "PMSA003A UART read error: %d", len);
+            uart_flush_input(PMSA003A_UART_NUM);
+            buffer_len = 0;
         }
         
         vTaskDelay(pdMS_TO_TICKS(100));
@@ -1075,13 +1093,17 @@ esp_err_t aeris_driver_init(void)
     
     if (pmsa003a_polling_timer == NULL) {
         ESP_LOGE(TAG, "Failed to create PMSA003A polling timer");
-        return ESP_FAIL;
-    }
-    
-    // Start the timer
-    if (xTimerStart(pmsa003a_polling_timer, 0) != pdPASS) {
-        ESP_LOGE(TAG, "Failed to start PMSA003A polling timer");
-        return ESP_FAIL;
+        ESP_LOGW(TAG, "Continuing with PM sensor in continuous mode");
+        // Non-fatal - sensor will work in continuous mode
+    } else {
+        // Start the timer
+        if (xTimerStart(pmsa003a_polling_timer, 0) != pdPASS) {
+            ESP_LOGE(TAG, "Failed to start PMSA003A polling timer");
+            ESP_LOGW(TAG, "Continuing with PM sensor in continuous mode");
+        } else {
+            ESP_LOGI(TAG, "PMSA003A polling timer started with %lu second interval", 
+                     pmsa003a_polling_interval_s);
+        }
     }
     
     ESP_LOGI(TAG, "PMSA003A polling timer started with %lu second interval", 
@@ -1344,7 +1366,7 @@ esp_err_t aeris_set_pm_polling_interval(uint32_t interval_s)
     if (interval_s == 0) {
         // Continuous mode - wake sensor and stop timer
         ESP_LOGI(TAG, "Setting PMSA003A to continuous mode");
-        if (pmsa003a_polling_timer) {
+        if (pmsa003a_polling_timer != NULL) {
             xTimerStop(pmsa003a_polling_timer, 0);
         }
         pmsa003a_wake();
@@ -1352,7 +1374,7 @@ esp_err_t aeris_set_pm_polling_interval(uint32_t interval_s)
         // Polled mode - put sensor to sleep and restart timer with new interval
         ESP_LOGI(TAG, "Setting PMSA003A polling interval to %lu seconds", interval_s);
         
-        if (pmsa003a_polling_timer) {
+        if (pmsa003a_polling_timer != NULL) {
             // Stop current timer
             xTimerStop(pmsa003a_polling_timer, 0);
             

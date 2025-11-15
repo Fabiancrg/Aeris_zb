@@ -306,8 +306,15 @@ esp_err_t led_set_color(led_id_t led_id, led_color_t color)
     
     esp_err_t ret = rmt_transmit(s_led_channels[led_id], s_led_encoder, led_data, sizeof(led_data), &tx_config);
     if (ret == ESP_OK) {
-        s_current_colors[led_id] = color;
-        rmt_tx_wait_all_done(s_led_channels[led_id], portMAX_DELAY);
+        // Wait with timeout to prevent indefinite blocking
+        ret = rmt_tx_wait_all_done(s_led_channels[led_id], pdMS_TO_TICKS(100));
+        if (ret == ESP_OK) {
+            s_current_colors[led_id] = color;
+        } else {
+            ESP_LOGW(TAG, "%s LED transmit timeout", LED_NAMES[led_id]);
+        }
+    } else {
+        ESP_LOGW(TAG, "%s LED transmit failed: %s", LED_NAMES[led_id], esp_err_to_name(ret));
     }
     
     return ret;
