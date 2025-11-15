@@ -570,9 +570,9 @@ static void esp_zb_task(void *pvParameters)
     ESP_ERROR_CHECK(esp_zb_cluster_list_add_basic_cluster(temp_hum_clusters, basic_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
     
     /* Add Temperature measurement cluster with REPORTING flag */
-    int16_t temp_value = 0x8000;  // Invalid value (0x8000)
-    int16_t temp_min = 0x954D;    // -40°C in 0.01°C units
-    int16_t temp_max = 0x7FFF;    // Max valid value
+    static int16_t temp_value = 0x8000;  // Invalid value (0x8000)
+    static int16_t temp_min = 0x954D;    // -40°C in 0.01°C units
+    static int16_t temp_max = 0x7FFF;    // Max valid value
     esp_zb_attribute_list_t *temp_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_TEMP_MEASUREMENT);
     ESP_ERROR_CHECK(esp_zb_cluster_add_attr(temp_cluster, ESP_ZB_ZCL_CLUSTER_ID_TEMP_MEASUREMENT,
                                             ESP_ZB_ZCL_ATTR_TEMP_MEASUREMENT_VALUE_ID, ESP_ZB_ZCL_ATTR_TYPE_S16,
@@ -582,9 +582,9 @@ static void esp_zb_task(void *pvParameters)
     ESP_ERROR_CHECK(esp_zb_cluster_list_add_temperature_meas_cluster(temp_hum_clusters, temp_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
     
     /* Add Humidity measurement cluster with REPORTING flag */
-    uint16_t hum_value = 0xFFFF;  // Invalid value
-    uint16_t hum_min = 0;         // 0% RH
-    uint16_t hum_max = 10000;     // 100% RH (in 0.01% units)
+    static uint16_t hum_value = 0xFFFF;  // Invalid value
+    static uint16_t hum_min = 0;         // 0% RH
+    static uint16_t hum_max = 10000;     // 100% RH (in 0.01% units)
     esp_zb_attribute_list_t *humidity_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_REL_HUMIDITY_MEASUREMENT);
     ESP_ERROR_CHECK(esp_zb_cluster_add_attr(humidity_cluster, ESP_ZB_ZCL_CLUSTER_ID_REL_HUMIDITY_MEASUREMENT,
                                             ESP_ZB_ZCL_ATTR_REL_HUMIDITY_MEASUREMENT_VALUE_ID, ESP_ZB_ZCL_ATTR_TYPE_U16,
@@ -607,16 +607,10 @@ static void esp_zb_task(void *pvParameters)
     /* Endpoint 2: Pressure with REPORTING flag */
     esp_zb_cluster_list_t *pressure_clusters = esp_zb_zcl_cluster_list_create();
     
-    esp_zb_basic_cluster_cfg_t basic_pressure_cfg = {
-        .zcl_version = ESP_ZB_ZCL_BASIC_ZCL_VERSION_DEFAULT_VALUE,
-        .power_source = ESP_ZB_ZCL_BASIC_POWER_SOURCE_DEFAULT_VALUE,
-    };
-    ESP_ERROR_CHECK(esp_zb_cluster_list_add_basic_cluster(pressure_clusters, esp_zb_basic_cluster_create(&basic_pressure_cfg), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
-    
     /* Create Pressure measurement cluster with REPORTING flag */
-    int16_t pressure_value = ESP_ZB_ZCL_ATTR_PRESSURE_MEASUREMENT_VALUE_UNKNOWN;
-    int16_t pressure_min = 300 * 10;   // 300 hPa in 0.1 kPa units
-    int16_t pressure_max = 1100 * 10;  // 1100 hPa in 0.1 kPa units
+    static int16_t pressure_value = ESP_ZB_ZCL_ATTR_PRESSURE_MEASUREMENT_VALUE_UNKNOWN;
+    static int16_t pressure_min = 300 * 10;   // 300 hPa in 0.1 kPa units
+    static int16_t pressure_max = 1100 * 10;  // 1100 hPa in 0.1 kPa units
     esp_zb_attribute_list_t *pressure_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_PRESSURE_MEASUREMENT);
     ESP_ERROR_CHECK(esp_zb_cluster_add_attr(pressure_cluster, ESP_ZB_ZCL_CLUSTER_ID_PRESSURE_MEASUREMENT,
                                             ESP_ZB_ZCL_ATTR_PRESSURE_MEASUREMENT_VALUE_ID, ESP_ZB_ZCL_ATTR_TYPE_S16,
@@ -637,14 +631,8 @@ static void esp_zb_task(void *pvParameters)
     /* Endpoint 3: PM1.0 - using Analog Input cluster with REPORTING flag */
     esp_zb_cluster_list_t *pm1_clusters = esp_zb_zcl_cluster_list_create();
     
-    esp_zb_basic_cluster_cfg_t basic_pm1_cfg = {
-        .zcl_version = ESP_ZB_ZCL_BASIC_ZCL_VERSION_DEFAULT_VALUE,
-        .power_source = ESP_ZB_ZCL_BASIC_POWER_SOURCE_DEFAULT_VALUE,
-    };
-    ESP_ERROR_CHECK(esp_zb_cluster_list_add_basic_cluster(pm1_clusters, esp_zb_basic_cluster_create(&basic_pm1_cfg), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
-    
     /* Create Analog Input cluster with REPORTING flag */
-    float pm1_present_value = 0.0f;
+    static float pm1_present_value = 0.0f;
     esp_zb_attribute_list_t *pm1_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT);
     ESP_ERROR_CHECK(esp_zb_cluster_add_attr(pm1_cluster, ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT,
                                             ESP_ZB_ZCL_ATTR_ANALOG_INPUT_PRESENT_VALUE_ID, ESP_ZB_ZCL_ATTR_TYPE_SINGLE,
@@ -665,14 +653,8 @@ static void esp_zb_task(void *pvParameters)
     /* Endpoint 4: PM2.5 - using Analog Input cluster with REPORTING flag */
     esp_zb_cluster_list_t *pm25_clusters = esp_zb_zcl_cluster_list_create();
     
-    esp_zb_basic_cluster_cfg_t basic_pm25_cfg = {
-        .zcl_version = ESP_ZB_ZCL_BASIC_ZCL_VERSION_DEFAULT_VALUE,
-        .power_source = ESP_ZB_ZCL_BASIC_POWER_SOURCE_DEFAULT_VALUE,
-    };
-    ESP_ERROR_CHECK(esp_zb_cluster_list_add_basic_cluster(pm25_clusters, esp_zb_basic_cluster_create(&basic_pm25_cfg), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
-    
     /* Create Analog Input cluster with REPORTING flag */
-    float pm25_present_value = 0.0f;
+    static float pm25_present_value = 0.0f;
     esp_zb_attribute_list_t *pm25_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT);
     ESP_ERROR_CHECK(esp_zb_cluster_add_attr(pm25_cluster, ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT,
                                             ESP_ZB_ZCL_ATTR_ANALOG_INPUT_PRESENT_VALUE_ID, ESP_ZB_ZCL_ATTR_TYPE_SINGLE,
@@ -693,14 +675,8 @@ static void esp_zb_task(void *pvParameters)
     /* Endpoint 5: PM10 - using Analog Input cluster with REPORTING flag */
     esp_zb_cluster_list_t *pm10_clusters = esp_zb_zcl_cluster_list_create();
     
-    esp_zb_basic_cluster_cfg_t basic_pm10_cfg = {
-        .zcl_version = ESP_ZB_ZCL_BASIC_ZCL_VERSION_DEFAULT_VALUE,
-        .power_source = ESP_ZB_ZCL_BASIC_POWER_SOURCE_DEFAULT_VALUE,
-    };
-    ESP_ERROR_CHECK(esp_zb_cluster_list_add_basic_cluster(pm10_clusters, esp_zb_basic_cluster_create(&basic_pm10_cfg), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
-    
     /* Create Analog Input cluster with REPORTING flag */
-    float pm10_present_value = 0.0f;
+    static float pm10_present_value = 0.0f;
     esp_zb_attribute_list_t *pm10_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT);
     ESP_ERROR_CHECK(esp_zb_cluster_add_attr(pm10_cluster, ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT,
                                             ESP_ZB_ZCL_ATTR_ANALOG_INPUT_PRESENT_VALUE_ID, ESP_ZB_ZCL_ATTR_TYPE_SINGLE,
@@ -721,14 +697,8 @@ static void esp_zb_task(void *pvParameters)
     /* Endpoint 6: VOC Index - using Analog Input cluster with REPORTING flag */
     esp_zb_cluster_list_t *voc_clusters = esp_zb_zcl_cluster_list_create();
     
-    esp_zb_basic_cluster_cfg_t basic_voc_cfg = {
-        .zcl_version = ESP_ZB_ZCL_BASIC_ZCL_VERSION_DEFAULT_VALUE,
-        .power_source = ESP_ZB_ZCL_BASIC_POWER_SOURCE_DEFAULT_VALUE,
-    };
-    ESP_ERROR_CHECK(esp_zb_cluster_list_add_basic_cluster(voc_clusters, esp_zb_basic_cluster_create(&basic_voc_cfg), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
-    
     /* Create Analog Input cluster with REPORTING flag */
-    float voc_present_value = 0.0f;
+    static float voc_present_value = 0.0f;
     esp_zb_attribute_list_t *voc_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT);
     ESP_ERROR_CHECK(esp_zb_cluster_add_attr(voc_cluster, ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT,
                                             ESP_ZB_ZCL_ATTR_ANALOG_INPUT_PRESENT_VALUE_ID, ESP_ZB_ZCL_ATTR_TYPE_SINGLE,
@@ -749,14 +719,8 @@ static void esp_zb_task(void *pvParameters)
     /* Endpoint 7: NOx Index - using Analog Input cluster with REPORTING flag */
     esp_zb_cluster_list_t *nox_clusters = esp_zb_zcl_cluster_list_create();
     
-    esp_zb_basic_cluster_cfg_t basic_nox_cfg = {
-        .zcl_version = ESP_ZB_ZCL_BASIC_ZCL_VERSION_DEFAULT_VALUE,
-        .power_source = ESP_ZB_ZCL_BASIC_POWER_SOURCE_DEFAULT_VALUE,
-    };
-    ESP_ERROR_CHECK(esp_zb_cluster_list_add_basic_cluster(nox_clusters, esp_zb_basic_cluster_create(&basic_nox_cfg), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
-    
     /* Create Analog Input cluster with REPORTING flag */
-    float nox_present_value = 0.0f;
+    static float nox_present_value = 0.0f;
     esp_zb_attribute_list_t *nox_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT);
     ESP_ERROR_CHECK(esp_zb_cluster_add_attr(nox_cluster, ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT,
                                             ESP_ZB_ZCL_ATTR_ANALOG_INPUT_PRESENT_VALUE_ID, ESP_ZB_ZCL_ATTR_TYPE_SINGLE,
@@ -777,16 +741,10 @@ static void esp_zb_task(void *pvParameters)
     /* Endpoint 8: CO2 - using Carbon Dioxide Measurement cluster with REPORTING flag */
     esp_zb_cluster_list_t *co2_clusters = esp_zb_zcl_cluster_list_create();
     
-    esp_zb_basic_cluster_cfg_t basic_co2_cfg = {
-        .zcl_version = ESP_ZB_ZCL_BASIC_ZCL_VERSION_DEFAULT_VALUE,
-        .power_source = ESP_ZB_ZCL_BASIC_POWER_SOURCE_DEFAULT_VALUE,
-    };
-    ESP_ERROR_CHECK(esp_zb_cluster_list_add_basic_cluster(co2_clusters, esp_zb_basic_cluster_create(&basic_co2_cfg), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
-    
     /* CO2 measurement cluster with REPORTING flag */
-    float co2_measured_value = 0;
-    float co2_min_measured_value = 400;   // 400 ppm
-    float co2_max_measured_value = 5000;  // 5000 ppm
+    static float co2_measured_value = 0;
+    static float co2_min_measured_value = 400;   // 400 ppm
+    static float co2_max_measured_value = 5000;  // 5000 ppm
     esp_zb_attribute_list_t *co2_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_CARBON_DIOXIDE_MEASUREMENT);
     ESP_ERROR_CHECK(esp_zb_cluster_add_attr(co2_cluster, ESP_ZB_ZCL_CLUSTER_ID_CARBON_DIOXIDE_MEASUREMENT,
                                             ESP_ZB_ZCL_ATTR_CARBON_DIOXIDE_MEASUREMENT_MEASURED_VALUE_ID, ESP_ZB_ZCL_ATTR_TYPE_SINGLE,
@@ -806,12 +764,6 @@ static void esp_zb_task(void *pvParameters)
     
     /* Endpoint 9: LED Configuration */
     esp_zb_cluster_list_t *led_clusters = esp_zb_zcl_cluster_list_create();
-    
-    esp_zb_basic_cluster_cfg_t basic_led_cfg = {
-        .zcl_version = ESP_ZB_ZCL_BASIC_ZCL_VERSION_DEFAULT_VALUE,
-        .power_source = ESP_ZB_ZCL_BASIC_POWER_SOURCE_DEFAULT_VALUE,
-    };
-    ESP_ERROR_CHECK(esp_zb_cluster_list_add_basic_cluster(led_clusters, esp_zb_basic_cluster_create(&basic_led_cfg), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
     
     /* On/Off cluster for LED enable/disable */
     esp_zb_on_off_cluster_cfg_t led_on_off_cfg = {
@@ -870,12 +822,6 @@ static void esp_zb_task(void *pvParameters)
     
     /* Endpoint 10: Zigbee Status LED */
     esp_zb_cluster_list_t *status_led_clusters = esp_zb_zcl_cluster_list_create();
-    
-    esp_zb_basic_cluster_cfg_t basic_status_cfg = {
-        .zcl_version = ESP_ZB_ZCL_BASIC_ZCL_VERSION_DEFAULT_VALUE,
-        .power_source = ESP_ZB_ZCL_BASIC_POWER_SOURCE_DEFAULT_VALUE,
-    };
-    ESP_ERROR_CHECK(esp_zb_cluster_list_add_basic_cluster(status_led_clusters, esp_zb_basic_cluster_create(&basic_status_cfg), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
     
     /* On/Off cluster for status LED enable/disable */
     esp_zb_on_off_cluster_cfg_t status_led_on_off_cfg = {
