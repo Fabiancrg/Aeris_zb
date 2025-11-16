@@ -51,10 +51,33 @@ typedef struct {
 /* SCD40 CO2 Sensor I2C Address */
 #define SCD40_I2C_ADDR          0x62  // Fixed I2C address
 
-/* UART Configuration for PMSA003A */
+/* UART Configuration for PMSA003A Particulate Matter Sensor
+ * 
+ * PMSA003-A 10-pin Connector Pinout (from datasheet):
+ *   Pin 1-2:  VCC (Positive power 5V)
+ *   Pin 3-4:  GND (Negative power)
+ *   Pin 5:    RESET (TTL 3.3V, active LOW, internal pull-up)
+ *   Pin 6:    NC (Not connected - DO NOT CONNECT)
+ *   Pin 7:    RXD (Serial port receiving pin, TTL 3.3V)
+ *   Pin 8:    NC (Not connected - DO NOT CONNECT)
+ *   Pin 9:    TXD (Serial port transmission pin, TTL 3.3V)
+ *   Pin 10:   SET (Sleep/Wake, TTL 3.3V - HIGH=normal, LOW=sleep, internal pull-up)
+ * 
+ * Circuit Attentions:
+ *   - 5V required for fan, but all signals are 3.3V (no level conversion for ESP32)
+ *   - SET and RESET have internal pull-ups (can leave floating if unused)
+ *   - Pin 6 and Pin 8 MUST NOT be connected
+ *   - Wait 30 seconds after wake from sleep for stable readings (fan stabilization)
+ * 
+ * ESP32-C6 Connections:
+ *   GPIO 18 (UART TX) → PMSA003-A Pin 7 (RXD) - for commands (optional)
+ *   GPIO 20 (UART RX) ← PMSA003-A Pin 9 (TXD) - for data (required)
+ *   5V → Pin 1-2, GND → Pin 3-4
+ *   Pin 5 (RESET) and Pin 10 (SET) can be left floating (internal pull-ups)
+ */
 #define PMSA003A_UART_NUM       UART_NUM_1
-#define PMSA003A_UART_TX_PIN    18   // GPIO18 (TX to PMSA003A RX for commands)
-#define PMSA003A_UART_RX_PIN    20   // GPIO20 (RX from PMSA003A TX)
+#define PMSA003A_UART_TX_PIN    18   // GPIO18 → PMSA003A Pin 7 (RXD) for sending commands
+#define PMSA003A_UART_RX_PIN    20   // GPIO20 ← PMSA003A Pin 9 (TXD) for receiving data
 #define PMSA003A_UART_BAUD      9600
 #define PMSA003A_UART_BUF_SIZE  512
 

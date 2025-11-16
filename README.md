@@ -558,19 +558,47 @@ SDA       → GPIO 6
 
 ### PMSA003A Wiring
 
+The PMSA003-A uses a **10-pin connector** with the following pinout:
+
 ```
-PMSA003A Pin → ESP32-C6
-VCC (Pin 1)  → 5V
-GND (Pin 2)  → GND
-SET (Pin 3)  → Not connected (or 5V for continuous mode)
-RX  (Pin 4)  → Not connected
-TX  (Pin 5)  → GPIO 20 (ESP32 UART RX)
-RESET (Pin 6)→ Not connected (or 5V)
-NC  (Pin 7)  → Not connected
-NC  (Pin 8)  → Not connected
+PMSA003A 10-Pin Connector → Function              → ESP32-C6
+─────────────────────────────────────────────────────────────────
+Pin 1:  VCC                → Positive power 5V    → 5V
+Pin 2:  VCC                → Positive power 5V    → 5V
+Pin 3:  GND                → Negative power       → GND
+Pin 4:  GND                → Negative power       → GND
+Pin 5:  RESET              → Reset (active LOW)   → 3.3V or GPIO (normal HIGH)
+Pin 6:  NC                 → Not connected        → Not connected
+Pin 7:  RXD                → Serial RX (TTL 3.3V) → GPIO 18 (ESP32 UART TX)
+Pin 8:  NC                 → Not connected        → Not connected
+Pin 9:  TXD                → Serial TX (TTL 3.3V) → GPIO 20 (ESP32 UART RX)
+Pin 10: SET                → Sleep/Wake (TTL 3.3V)→ 3.3V or GPIO (normal HIGH)
 ```
 
-**Note**: PMSA003A requires 5V power supply. TX output is 3.3V compatible.
+**Important Notes:**
+- **Power**: Dual VCC pins (Pin 1-2) require **5V**, dual GND pins (Pin 3-4) to ground
+- **Signal levels**: All digital signals (RXD, TXD, RESET, SET) are **TTL 3.3V** - safe for ESP32-C6
+- **SET pin (Pin 10)**: HIGH or floating = normal operation, LOW = sleep mode
+- **RESET pin (Pin 5)**: LOW = reset, HIGH = normal operation
+- **GPIO 20 (ESP RX)** ← Pin 9 (TXD) - **Required** for receiving sensor data
+- **GPIO 18 (ESP TX)** → Pin 7 (RXD) - **Optional** for sending commands (sleep/wake)
+
+**Circuit Attentions (from datasheet):**
+1. **5V power required**: The internal fan requires 5V, but all data signals are 3.3V TTL
+   - ✅ No level conversion needed when interfacing with ESP32-C6 (3.3V MCU)
+   - ⚠️ Level conversion required if using 5V MCU (Arduino Uno, etc.)
+2. **Internal pull-ups**: SET (Pin 10) and RESET (Pin 5) have internal pull-up resistors
+   - Can be left **floating/unconnected** if not used (default = HIGH/normal operation)
+   - Only connect if you need sleep/wake or reset control via GPIO
+3. **Do NOT connect Pin 6 and Pin 8** - These pins must remain unconnected
+4. **30-second warm-up**: After waking from sleep mode, wait at least 30 seconds for stable readings
+   - Fan needs time to stabilize
+   - Firmware polling mode accounts for this (see PM Sensor Power Management section)
+
+**Current Configuration:**
+- Continuous operation mode (SET and RESET left floating, default HIGH)
+- UART RX only (GPIO 20) for passive data reception
+- GPIO 18 can be connected for active command mode
 
 ### LPS22HB Wiring
 
