@@ -6,4 +6,8 @@ CodeToReusePartially
 backup/
 doc/
 join.log
-
+PCB/caelum/aeris-backups
+PCB/aeris/~*
+PCB/aeris/#*
+PCB/aeris/_*
+PCB\aeris\fp-info-cache

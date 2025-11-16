@@ -1,12 +1,14 @@
 # RGB LED Air Quality Indicators
 
 ## Overview
-The Aeris_zb air quality sensor includes **4 separate RGB LEDs (SK6812)** that provide independent visual feedback for each air quality parameter:
+The Aeris_zb air quality sensor includes **6 separate RGB LEDs (SK6812)** that provide independent visual feedback for each air quality parameter and system status:
 
 - **CO2 LED** - Carbon dioxide level indicator
-- **VOC LED** - Volatile organic compounds indicator  
+- **VOC LED** - Volatile organic compounds indicator
+- **NOx LED** - Nitrogen oxides indicator
 - **PM2.5 LED** - Particulate matter indicator
 - **Humidity LED** - Humidity level indicator
+- **Status LED** - Network / firmware status indicator (join, connected, error)
 
 Each LED shows:
 - **Green** - Parameter is in good range
@@ -16,14 +18,16 @@ Each LED shows:
 All 4 LEDs can be enabled/disabled together with a single Zigbee On/Off command.
 
 ## Hardware Connection
-Connect 4 SK6812 RGB LEDs to the Xiao ESP32-C6:
+Connect 6 SK6812 RGB LEDs to the Xiao ESP32-C6:
 
 | LED Purpose | GPIO | Connection |
 |-------------|------|------------|
 | CO2 | GPIO21 | Data line |
 | VOC | GPIO4 | Data line |
+| NOx | GPIO8 | Data line |
 | PM2.5 | GPIO5 | Data line |
 | Humidity | GPIO10 | Data line |
+| Status | GPIO23 | Data line (status LED, controlled by firmware)
 
 For each LED:
 - Data → GPIO pin (see table above)
@@ -36,9 +40,10 @@ You can change the GPIO pins in `main/board.h` if needed.
 The LED is controlled via **Endpoint 8** with the following clusters:
 
 ### On/Off Cluster (0x0006)
-- **Attribute 0x0000 (OnOff)**: Enable/disable ALL 4 LEDs simultaneously
-  - `true` = All LEDs enabled (show air quality status)
-  - `false` = All LEDs disabled (always off)
+- **Attribute 0x0000 (OnOff)**: Enable/disable parameter LEDs (CO2, VOC, NOx, PM2.5, Humidity)
+    - `true` = Parameter LEDs enabled (show air quality status)
+    - `false` = Parameter LEDs disabled (always off)
+    - **Note**: The Status LED is firmware-controlled and may remain active for critical network indicators depending on configuration.
 
 ### Analog Output Cluster (0x000D) - Threshold Attributes
 Custom manufacturer-specific attributes for configuring thresholds:
@@ -55,6 +60,8 @@ Custom manufacturer-specific attributes for configuring thresholds:
 | 0xF007 | Humidity Red High | 80 | Too humid danger (%) |
 | 0xF008 | PM2.5 Orange | 25 | PM2.5 warning level (µg/m³) |
 | 0xF009 | PM2.5 Red | 55 | PM2.5 danger level (µg/m³) |
+| 0xF00A | NOx Orange | 200 | NOx warning level (ppb) |
+| 0xF00B | NOx Red | 400 | NOx danger level (ppb) |
 
 ## Zigbee2MQTT Configuration
 
@@ -127,6 +134,11 @@ const definition = {
             .withDescription('PM2.5 orange (warning) threshold').withEndpoint('led_config'),
         e.numeric('pm25_red_threshold', ea.ALL).withValueMin(0).withValueMax(500).withUnit('µg/m³')
             .withDescription('PM2.5 red (danger) threshold').withEndpoint('led_config'),
+        // NOx thresholds (ppb)
+        e.numeric('nox_orange_threshold', ea.ALL).withValueMin(0).withValueMax(10000).withUnit('ppb')
+            .withDescription('NOx orange (warning) threshold').withEndpoint('led_config'),
+        e.numeric('nox_red_threshold', ea.ALL).withValueMin(0).withValueMax(10000).withUnit('ppb')
+            .withDescription('NOx red (danger) threshold').withEndpoint('led_config'),
     ],
     
     endpoint: (device) => {
@@ -149,6 +161,8 @@ const definition = {
 
 module.exports = definition;
 ```
+    # Set NOx thresholds (ppb)
+        {"nox_orange_threshold": 200, "nox_red_threshold": 400}
 
 ### Setting Thresholds via MQTT
 
@@ -176,6 +190,9 @@ Examples:
 
 # Set PM2.5 thresholds (µg/m³)
 {"pm25_orange_threshold": 25, "pm25_red_threshold": 55}
+
+# Set NOx thresholds (ppb)
+{"nox_orange_threshold": 200, "nox_red_threshold": 400}
 ```
 
 ## Air Quality Guidelines
