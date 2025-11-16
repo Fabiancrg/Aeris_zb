@@ -65,15 +65,21 @@ typedef struct {
  * 
  * Circuit Attentions:
  *   - 5V required for fan, but all signals are 3.3V (no level conversion for ESP32)
- *   - SET and RESET have internal pull-ups (can leave floating if unused)
+ *   - SET and RESET have internal pull-ups (can leave floating for continuous operation)
  *   - Pin 6 and Pin 8 MUST NOT be connected
  *   - Wait 30 seconds after wake from sleep for stable readings (fan stabilization)
  * 
  * ESP32-C6 Connections:
  *   GPIO 18 (UART TX) → PMSA003-A Pin 7 (RXD) - for commands (optional)
  *   GPIO 20 (UART RX) ← PMSA003-A Pin 9 (TXD) - for data (required)
+ *   GPIO 19 → PMSA003-A Pin 10 (SET) - for sleep/wake control (recommended)
+ *   GPIO 2 → PMSA003-A Pin 5 (RESET) - for hardware reset (optional)
  *   5V → Pin 1-2, GND → Pin 3-4
- *   Pin 5 (RESET) and Pin 10 (SET) can be left floating (internal pull-ups)
+ * 
+ * Power Savings with SET Pin Control:
+ *   - Continuous operation: ~100 mA
+ *   - Sleep mode: <1 mA
+ *   - Polling every 5 minutes: ~28.5 mA average (71.5 mA savings)
  */
 #define PMSA003A_UART_NUM       UART_NUM_1
 #define PMSA003A_UART_TX_PIN    18   // GPIO18 → PMSA003A Pin 7 (RXD) for sending commands

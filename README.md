@@ -567,37 +567,53 @@ Pin 1:  VCC                → Positive power 5V    → 5V
 Pin 2:  VCC                → Positive power 5V    → 5V
 Pin 3:  GND                → Negative power       → GND
 Pin 4:  GND                → Negative power       → GND
-Pin 5:  RESET              → Reset (active LOW)   → 3.3V or GPIO (normal HIGH)
+Pin 5:  RESET              → Reset (active LOW)   → GPIO 2 (optional, for HW reset)
 Pin 6:  NC                 → Not connected        → Not connected
 Pin 7:  RXD                → Serial RX (TTL 3.3V) → GPIO 18 (ESP32 UART TX)
 Pin 8:  NC                 → Not connected        → Not connected
 Pin 9:  TXD                → Serial TX (TTL 3.3V) → GPIO 20 (ESP32 UART RX)
-Pin 10: SET                → Sleep/Wake (TTL 3.3V)→ 3.3V or GPIO (normal HIGH)
+Pin 10: SET                → Sleep/Wake (TTL 3.3V)→ GPIO 19 (for power management)
 ```
 
 **Important Notes:**
 - **Power**: Dual VCC pins (Pin 1-2) require **5V**, dual GND pins (Pin 3-4) to ground
 - **Signal levels**: All digital signals (RXD, TXD, RESET, SET) are **TTL 3.3V** - safe for ESP32-C6
-- **SET pin (Pin 10)**: HIGH or floating = normal operation, LOW = sleep mode
+- **SET pin (Pin 10)**: HIGH = normal operation, LOW = sleep mode
+  - **Recommended**: Connect to GPIO for power management (put sensor to sleep when not needed)
+  - If left floating: sensor always runs (consumes ~100mA continuously)
 - **RESET pin (Pin 5)**: LOW = reset, HIGH = normal operation
+  - **Optional**: Connect to GPIO for hardware reset capability
+  - If left floating: relies on internal pull-up (normal operation)
 - **GPIO 20 (ESP RX)** ← Pin 9 (TXD) - **Required** for receiving sensor data
-- **GPIO 18 (ESP TX)** → Pin 7 (RXD) - **Optional** for sending commands (sleep/wake)
+- **GPIO 18 (ESP TX)** → Pin 7 (RXD) - **Optional** for sending commands
 
 **Circuit Attentions (from datasheet):**
 1. **5V power required**: The internal fan requires 5V, but all data signals are 3.3V TTL
    - ✅ No level conversion needed when interfacing with ESP32-C6 (3.3V MCU)
    - ⚠️ Level conversion required if using 5V MCU (Arduino Uno, etc.)
 2. **Internal pull-ups**: SET (Pin 10) and RESET (Pin 5) have internal pull-up resistors
-   - Can be left **floating/unconnected** if not used (default = HIGH/normal operation)
-   - Only connect if you need sleep/wake or reset control via GPIO
+   - **Can be left floating** if continuous operation is desired (default = HIGH)
+   - **Should connect to GPIO** for power management:
+     - **Pin 10 (SET)**: Essential for sleep/wake control (save ~100mA when sleeping)
+     - **Pin 5 (RESET)**: Optional for hardware reset capability
 3. **Do NOT connect Pin 6 and Pin 8** - These pins must remain unconnected
 4. **30-second warm-up**: After waking from sleep mode, wait at least 30 seconds for stable readings
    - Fan needs time to stabilize
-   - Firmware polling mode accounts for this (see PM Sensor Power Management section)
+   - Firmware must account for this delay in polling mode
 
-**Current Configuration:**
-- Continuous operation mode (SET and RESET left floating, default HIGH)
-- UART RX only (GPIO 20) for passive data reception
+**Recommended Configuration for Power Management:**
+- **Pin 10 (SET)** → **GPIO 19** - for sleep/wake control
+- **Pin 5 (RESET)** → **GPIO 2** - optional, for hardware reset
+- **Pin 7 (RXD)** → GPIO 18 (ESP UART TX) - for sending commands
+- **Pin 9 (TXD)** → GPIO 20 (ESP UART RX) - for receiving data
+
+**Simple Configuration (continuous operation):**
+- **Pin 10 (SET)** → Leave floating (sensor always on)
+- **Pin 5 (RESET)** → Leave floating (normal operation)
+- **Pin 7 (RXD)** → Not connected (no commands sent)
+- **Pin 9 (TXD)** → GPIO 20 (ESP UART RX) - for receiving data
+
+**Note:** GPIO assignments can be changed in `main/board.h` if needed.
 - GPIO 18 can be connected for active command mode
 
 ### LPS22HB Wiring

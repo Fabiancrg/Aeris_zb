@@ -7,6 +7,7 @@
  */
 
 #include "aeris_driver.h"
+#include "board.h"
 #include "esp_log.h"
 #include "string.h"
 #include "freertos/FreeRTOS.h"
@@ -750,6 +751,34 @@ static esp_err_t pmsa003a_uart_init(void)
         return err;
     }
     
+    // Initialize SET pin (sleep/wake control)
+    gpio_config_t io_conf = {
+        .intr_type = GPIO_INTR_DISABLE,
+        .mode = GPIO_MODE_OUTPUT,
+        .pin_bit_mask = (1ULL << PMSA003A_SET_GPIO),
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .pull_up_en = GPIO_PULLUP_DISABLE,  // Internal pull-up exists on sensor
+    };
+    err = gpio_config(&io_conf);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "PMSA003A SET GPIO config failed: %s", esp_err_to_name(err));
+        return err;
+    }
+    
+    // Start with sensor awake (SET pin HIGH)
+    gpio_set_level(PMSA003A_SET_GPIO, 1);
+    ESP_LOGI(TAG, "PMSA003A SET pin (GPIO%d) initialized HIGH (sensor active)", PMSA003A_SET_GPIO);
+    
+    // Optional: Initialize RESET pin (for hardware reset capability)
+    #ifdef PMSA003A_RESET_GPIO
+    io_conf.pin_bit_mask = (1ULL << PMSA003A_RESET_GPIO);
+    err = gpio_config(&io_conf);
+    if (err == ESP_OK) {
+        gpio_set_level(PMSA003A_RESET_GPIO, 1);  // Keep HIGH for normal operation
+        ESP_LOGI(TAG, "PMSA003A RESET pin (GPIO%d) initialized HIGH (normal operation)", PMSA003A_RESET_GPIO);
+    }
+    #endif
+    
     ESP_LOGI(TAG, "PMSA003A UART initialized on RX=%d, baud=%d", 
              PMSA003A_UART_RX_PIN, PMSA003A_UART_BAUD);
     return ESP_OK;
@@ -788,6 +817,13 @@ static esp_err_t pmsa003a_send_command(const uint8_t *cmd, size_t len)
  */
 esp_err_t pmsa003a_wake(void)
 {
+    // Set GPIO HIGH to wake sensor (must be done before UART command)
+    gpio_set_level(PMSA003A_SET_GPIO, 1);
+    ESP_LOGD(TAG, "PMSA003A SET pin HIGH (wake)");
+    
+    // Wait a moment for sensor to wake
+    vTaskDelay(pdMS_TO_TICKS(100));
+    
     // Wake command: 0x42 0x4D 0xE4 0x00 0x01 0x01 0x74
     const uint8_t wake_cmd[] = {0x42, 0x4D, 0xE4, 0x00, 0x01, 0x01, 0x74};
     
@@ -812,6 +848,13 @@ esp_err_t pmsa003a_sleep(void)
         ESP_LOGI(TAG, "PMSA003A entering sleep mode");
         pmsa003a_current_mode = PMSA003A_MODE_PASSIVE;
         pmsa003a_data_valid = false; // Invalidate old data
+        
+        // Wait for command to complete
+        vTaskDelay(pdMS_TO_TICKS(100));
+        
+        // Set GPIO LOW to put sensor to sleep (hardware sleep)
+        gpio_set_level(PMSA003A_SET_GPIO, 0);
+        ESP_LOGD(TAG, "PMSA003A SET pin LOW (sleep)");
     }
     return err;
 }

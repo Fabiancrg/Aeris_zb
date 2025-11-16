@@ -50,3 +50,12 @@
 #endif
 
 #define LED_STATUS_NUM_LEDS 1  /* Number of LEDs per indicator (1 each) */
+
+/* PMSA003A PM sensor control pins */
+#ifndef PMSA003A_SET_GPIO
+#define PMSA003A_SET_GPIO GPIO_NUM_19  /* Sleep/Wake control (HIGH=active, LOW=sleep) */
+#endif
+
+#ifndef PMSA003A_RESET_GPIO
+#define PMSA003A_RESET_GPIO GPIO_NUM_2  /* Hardware reset (active LOW, optional) */
+#endif
