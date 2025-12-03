@@ -991,8 +991,8 @@ static void pmsa003a_task(void *arg)
     // Initialize uart_read_bytes return value check
     memset(buffer, 0, sizeof(buffer));
     
-    // Start in sleep mode with default 5-minute polling
-    pmsa003a_sleep();
+    // Don't sleep immediately - let aeris_driver_init() control initial state
+    // The driver init will either wake for immediate reading or configure polling
     
     while (1) {
         // Check if we need to sleep the sensor after wake period
@@ -1232,14 +1232,19 @@ esp_err_t aeris_driver_init(void)
         ESP_LOGE(TAG, "Failed to create PMSA003A polling timer");
         ESP_LOGW(TAG, "Continuing with PM sensor in continuous mode");
         // Non-fatal - sensor will work in continuous mode
+        pmsa003a_wake();  // Wake sensor for continuous mode
     } else {
         // Start the timer
         if (xTimerStart(pmsa003a_polling_timer, 0) != pdPASS) {
             ESP_LOGE(TAG, "Failed to start PMSA003A polling timer");
             ESP_LOGW(TAG, "Continuing with PM sensor in continuous mode");
+            pmsa003a_wake();  // Wake sensor for continuous mode
         } else {
             ESP_LOGI(TAG, "PMSA003A polling timer started with %lu second interval", 
                      pmsa003a_polling_interval_s);
+            // Trigger immediate first read - don't wait for first timer interval
+            ESP_LOGI(TAG, "Triggering immediate PMSA003A wake for initial reading");
+            pmsa003a_wake();
         }
     }
     

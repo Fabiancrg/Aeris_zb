@@ -47,6 +47,8 @@ The Zigbee air quality sensor exposes the following sensor endpoints:
 - **Humidity Range**: 0-100% RH
 - **Humidity Accuracy**: ±1.0% RH (typical, 25-75% RH)
 - **Measurement Time**: 8.2ms (high precision mode)
+- **Calibration Offsets**: Custom attributes (0xF010, 0xF011) for temperature/humidity adjustment
+- **Sensor Refresh Interval**: Configurable update rate (10-3600s, default 30s) via attribute 0xF011
 
 ### Endpoint 2: Pressure Sensor
 - **Pressure Measurement Cluster (0x0403)**: Atmospheric pressure in hPa
@@ -111,7 +113,7 @@ The Zigbee air quality sensor exposes the following sensor endpoints:
   - 🔴 **Red**: Error during initialization
 - **GPIO**: GPIO8 (built-in LED on ESP32-C6 Supermini)
 
-## RGB LED Air Quality Indicators
+### RGB LED Air Quality Indicators
 
 The device includes **5 separate RGB LEDs (SK6812)** that provide real-time visual feedback for air quality:
 
@@ -120,7 +122,7 @@ The device includes **5 separate RGB LEDs (SK6812)** that provide real-time visu
 - **VOC LED** (GPIO18): Shows volatile organic compounds status
 - **NOx LED** (GPIO15): Shows nitrogen oxides status
 - **PM2.5 LED** (GPIO20): Shows particulate matter status
-- **Humidity LED** (GPIO9): Shows humidity level status
+- **Humidity LED** (GPIO14): Shows humidity level status
 
 ### Color Coding
 Each LED independently displays:
@@ -132,9 +134,12 @@ Each LED independently displays:
 - **Independent operation**: Each LED shows only its corresponding sensor
 - **At-a-glance status**: Quickly identify which parameter needs attention
 - **Configurable thresholds**: Adjust warning/danger levels via Zigbee2MQTT
+- **Brightness control**: Adjustable LED brightness (1-255) via Level Control cluster
+- **Settings persistence**: All LED settings, thresholds, and calibrations stored in NVS (survive reboots)
 - **Dual control**:
-  - **Master switch**: Enable/disable all LEDs at once (On/Off cluster)
+  - **Master switch**: Enable/disable all sensor LEDs at once (On/Off cluster)
   - **Individual control**: Enable/disable each LED separately via bitmask (0xF00C)
+  - **Status LED control**: Independent on/off control for Zigbee status LED (endpoint 10)
 - **Low power**: LEDs only update when color changes
 
 ### LED Control
@@ -193,8 +198,10 @@ The device communicates with most sensors via I2C:
 
 The PMSA003A sensor uses UART communication:
 
-- **RX Pin**: GPIO 20 (receives data from PMSA003A TX)
-- **TX Pin**: GPIO 18 (not used - PMSA003A is read-only)
+- **RX Pin**: GPIO 5 (receives data from PMSA003A TX)
+- **TX Pin**: GPIO 4 (sends commands to PMSA003A RX)
+- **SET Pin**: GPIO 19 (sleep/wake control - HIGH=active, LOW=sleep)
+- **RESET Pin**: GPIO 2 (hardware reset, optional - active LOW)
 - **Baud Rate**: 9600
 - **Data Format**: 8N1 (8 data bits, no parity, 1 stop bit)
 - **Frame Length**: 32 bytes
@@ -215,13 +222,15 @@ Aeris_zb/
 │   ├── esp_zb_aeris.h         # Zigbee configuration header
 │   ├── aeris_driver.c         # Air quality sensor driver implementation
 │   ├── aeris_driver.h         # Sensor driver header
-│   ├── led_indicator.c        # RGB LED driver (4 LEDs via RMT)
+│   ├── led_indicator.c        # RGB LED driver (6 LEDs via RMT)
 │   ├── led_indicator.h        # LED driver header
+│   ├── settings.c             # NVS settings persistence
+│   ├── settings.h             # Settings header
 │   ├── esp_zb_ota.c           # OTA update support
 │   ├── esp_zb_ota.h           # OTA header
 │   ├── board.h                # Board pin definitions (GPIO mapping)
 │   ├── CMakeLists.txt         # Component build configuration
-│   └── idf_component.yml      # Component dependenciesnt architecture
+│   └── idf_component.yml      # Component dependencies
 ├── CMakeLists.txt             # Project CMakeLists
 ├── sdkconfig                  # ESP-IDF configuration
 ├── README.md                  # This file
@@ -375,11 +384,16 @@ On first boot, the device will automatically enter network steering mode. Once j
 **Via Zigbee2MQTT:**
 
 ```javascript
-// Turn all LEDs on (master switch)
+// Turn all sensor LEDs on (master switch)
 await publish('zigbee2mqtt/aeris/set', {state: 'ON'});
 
-// Turn all LEDs off (master switch)
+// Turn all sensor LEDs off (master switch)
 await publish('zigbee2mqtt/aeris/set', {state: 'OFF'});
+
+// Set LED brightness (1-255, default 128)
+await publish('zigbee2mqtt/aeris/set', {brightness: 128});
+await publish('zigbee2mqtt/aeris/set', {brightness: 255});  // Max brightness
+await publish('zigbee2mqtt/aeris/set', {brightness: 64});   // Dim
 
 // Enable all 5 LEDs individually (bitmask)
 await publish('zigbee2mqtt/aeris/set', {led_enable_mask: 31});  // 0x1F
@@ -399,6 +413,14 @@ await publish('zigbee2mqtt/aeris/set', {led_enable_mask: 0});
 // Status LED control (endpoint 10)
 await publish('zigbee2mqtt/aeris_status/set', {state: 'ON'});   // Enable status LED
 await publish('zigbee2mqtt/aeris_status/set', {state: 'OFF'});  // Disable status LED
+
+// Calibration offsets (stored in NVS)
+await publish('zigbee2mqtt/aeris/set', {temperature_offset: 5});   // +0.5°C
+await publish('zigbee2mqtt/aeris/set', {temperature_offset: -10}); // -1.0°C
+await publish('zigbee2mqtt/aeris/set', {humidity_offset: 20});     // +2.0% RH
+
+// Sensor refresh interval (10-3600 seconds, default 30)
+await publish('zigbee2mqtt/aeris/set', {sensor_refresh_interval: 60}); // 1 minute
 ```
 
 ### Visual LED Status
@@ -569,9 +591,9 @@ Pin 3:  GND                → Negative power       → GND
 Pin 4:  GND                → Negative power       → GND
 Pin 5:  RESET              → Reset (active LOW)   → GPIO 2 (optional, for HW reset)
 Pin 6:  NC                 → Not connected        → Not connected
-Pin 7:  RXD                → Serial RX (TTL 3.3V) → GPIO 18 (ESP32 UART TX)
+Pin 7:  RXD                → Serial RX (TTL 3.3V) → GPIO 4 (ESP32 UART TX)
 Pin 8:  NC                 → Not connected        → Not connected
-Pin 9:  TXD                → Serial TX (TTL 3.3V) → GPIO 20 (ESP32 UART RX)
+Pin 9:  TXD                → Serial TX (TTL 3.3V) → GPIO 5 (ESP32 UART RX)
 Pin 10: SET                → Sleep/Wake (TTL 3.3V)→ GPIO 19 (for power management)
 ```
 
@@ -601,11 +623,11 @@ Pin 10: SET                → Sleep/Wake (TTL 3.3V)→ GPIO 19 (for power manag
    - Fan needs time to stabilize
    - Firmware must account for this delay in polling mode
 
-**Recommended Configuration for Power Management:**
-- **Pin 10 (SET)** → **GPIO 14** - for sleep/wake control
-- **Pin 5 (RESET)** → **GPIO 2** - optional, for hardware reset
-- **Pin 7 (RXD)** → GPIO 4 (ESP UART TX) - for sending commands
-- **Pin 9 (TXD)** → GPIO 5 (ESP UART RX) - for receiving data
+**Current Configuration (with Power Management):**
+- **Pin 10 (SET)** → **GPIO 19** - for sleep/wake control (implemented)
+- **Pin 5 (RESET)** → **GPIO 2** - optional, for hardware reset (implemented)
+- **Pin 7 (RXD)** → **GPIO 4** (ESP UART TX) - for sending commands (implemented)
+- **Pin 9 (TXD)** → **GPIO 5** (ESP UART RX) - for receiving data (implemented)
 
 **Simple Configuration (continuous operation):**
 - **Pin 10 (SET)** → Leave floating (sensor always on)
@@ -614,7 +636,6 @@ Pin 10: SET                → Sleep/Wake (TTL 3.3V)→ GPIO 19 (for power manag
 - **Pin 9 (TXD)** → GPIO 5 (ESP UART RX) - for receiving data
 
 **Note:** GPIO assignments can be changed in `main/board.h` if needed.
-- GPIO 18 can be connected for active command mode
 
 ### LPS22HB Wiring
 
@@ -664,20 +685,23 @@ CO2 LED        1       Data line
 VOC LED        18      Data line
 NOx LED        15      Data line
 PM2.5 LED      20      Data line
-Humidity LED   9       Data line
+Humidity LED   14      Data line
+Status LED     8       Data line (Zigbee status)
 
 For each LED:
   Data → GPIO pin (see table above)
-  VCC  → 3.3V or 5V (depending on LED specification)
+  VCC  → 5V (SK6812 specification)
   GND  → GND
 ```
 
 **Notes**: 
 - SK6812 LEDs use WS2812 protocol via RMT peripheral
 - Each LED operates independently showing its sensor's status
-- All 5 LEDs can be enabled/disabled together via Zigbee
+- All 5 sensor LEDs can be enabled/disabled together via Zigbee (endpoint 9)
+- Status LED controlled separately via endpoint 10
+- Brightness adjustable 1-255 via Level Control cluster
 - GPIO pins are configurable in `main/board.h`
-- Total LED current (all 5 at max brightness): ~300mA
+- Total LED current (all 6 at max brightness): ~360mA
 
 **Color Codes**:
 - 🟢 Green = Good air quality for that parameter
@@ -725,7 +749,14 @@ The SGP41 currently uses a **simplified placeholder** for VOC/NOx index calculat
   - **Continuous mode**: Readings should update every second
   - Check "PMSA003A waking up" and "entering sleep mode" log messages in polling mode
 
-**Power Note**: 6 LEDs (5 air quality + 1 status) at full brightness can draw ~360mA. Ensure adequate power supply (1A recommended).
+**Power Note**: 
+- **6 LEDs** (5 air quality + 1 status) at full brightness: ~360mA
+- **PMSA003A continuous mode**: ~100mA (fan always on)
+- **PMSA003A polling mode** (5 min): ~28.5mA average
+- **ESP32-C6 + sensors**: ~50-80mA
+- **Total (continuous PM)**: ~510-540mA
+- **Total (polling PM)**: ~440-470mA average
+- **Recommended power supply**: 1A minimum (USB 5V)
 
 ### Build errors
 - Make sure ESP-IDF v5.5.1+ is installed
