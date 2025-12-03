@@ -35,7 +35,7 @@ export default {
                         valueStep: 1,
                         unit: "0.1°C",
                         cluster: "msTemperatureMeasurement",
-                        attribute: 0xF00F,
+                        attribute: {ID: 0xF00F, type: 0x29},  // INT16S
                         description: "Temperature calibration offset (in 0.1°C, e.g., 30 = subtract 3.0°C)",
                         access: "ALL",
                         endpointNames: ["1"]
@@ -49,7 +49,7 @@ export default {
                         valueStep: 1,
                         unit: "0.1%",
                         cluster: "msTemperatureMeasurement",
-                        attribute: 0xF010,
+                        attribute: {ID: 0xF010, type: 0x29},  // INT16S
                         description: "Humidity calibration offset (in 0.1%, e.g., 10 = subtract 1.0%)",
                         access: "ALL",
                         endpointNames: ["1"]
@@ -66,33 +66,36 @@ export default {
                 ), 
                 m.numeric(
                     {
-                        name:"PM1.0 µg/m3",
+                        name:"pm1",
                         cluster:"genAnalogInput",
                         attribute:"presentValue",
                         reporting:{"min":"MIN","max":"MAX","change":1},
-                        description:"analog_input_3",
+                        description:"PM1.0 concentration in µg/m³",
+                        unit:"µg/m³",
                         access:"STATE_GET",
                         endpointNames:["3"]
                     }
                 ), 
                 m.numeric(
                     {
-                        name:"PM2.5 µg/m3",
+                        name:"pm25",
                         cluster:"genAnalogInput",
                         attribute:"presentValue",
                         reporting:{"min":"MIN","max":"MAX","change":1},
-                        description:"analog_input_4",
+                        description:"PM2.5 concentration in µg/m³",
+                        unit:"µg/m³",
                         access:"STATE_GET",
                         endpointNames:["4"]
                     }
                 ), 
                 m.numeric(
                     {
-                        name:"PM10 µg/m3",
+                        name:"pm10",
                         cluster:"genAnalogInput",
                         attribute:"presentValue",
                         reporting:{"min":"MIN","max":"MAX","change":1},
-                        description:"analog_input_5",
+                        description:"PM10 concentration in µg/m³",
+                        unit:"µg/m³",
                         access:"STATE_GET",
                         endpointNames:["5"]
                     }
@@ -100,22 +103,22 @@ export default {
                 m.numeric(
                     {
                         endpointNames:["6"],
-                        name:"VOC Index",
+                        name:"voc_index",
                         cluster:"genAnalogInput",
                         attribute:"presentValue",
                         reporting:{"min":"MIN","max":"MAX","change":1},
-                        description:"analog_input_6",
+                        description:"VOC Index (1-500, 100=normal)",
                         access:"STATE_GET"
                     }
                 ), 
                 m.numeric(
                     {
                         endpointNames:["7"],
-                        name:"NOx Index",
+                        name:"nox_index",
                         cluster:"genAnalogInput",
                         attribute:"presentValue",
                         reporting:{"min":"MIN","max":"MAX","change":1},
-                        description:"analog_input_7",
+                        description:"NOx Index (1-500, 1=normal)",
                         access:"STATE_GET"
 
                     }
