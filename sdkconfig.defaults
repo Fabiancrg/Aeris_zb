@@ -31,6 +31,12 @@ CONFIG_MBEDTLS_ECJPAKE_C=y
 # end of mbedTLS
 
 #
+# Panic Handler - halt instead of reboot to see crash info
+#
+CONFIG_ESP_SYSTEM_PANIC_PRINT_HALT=y
+# end of Panic Handler
+
+#
 # Zboss
 #
 CONFIG_ZB_ENABLED=y

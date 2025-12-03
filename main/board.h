@@ -5,18 +5,6 @@
 
 #include "driver/gpio.h"
 
-/* Debug/Development flags */
-#define DISABLE_LEDS 0  /* Set to 1 to disable all LED functionality */
-#define DISABLE_BOOT_BUTTON 1  /* Set to 1 to disable boot button factory reset */
-
-/* WiFi Logging Configuration (for debugging while using external power)
- * Enable this to broadcast logs over UDP while Zigbee runs.
- * Listen with: nc -u -l 5000
- */
-#define WIFI_LOG_ENABLE  0                    /* Set to 1 to enable WiFi logging */
-#define WIFI_LOG_SSID    "HomeParents"     /* Your WiFi network name */
-#define WIFI_LOG_PASS    "S0lut10nPaMa" /* Your WiFi password */
-
 /* RGB LED configuration (SK6812) - 5 separate LEDs for air quality indicators
  * Optimized for ESP32-C6 Supermini available GPIOs
  */
@@ -37,7 +25,7 @@
 #endif
 
 #ifndef LED_HUM_GPIO
-#define LED_HUM_GPIO GPIO_NUM_9   /* Humidity level indicator */
+#define LED_HUM_GPIO GPIO_NUM_14  /* Humidity level indicator */
 #endif
 
 #ifndef LED_STATUS_GPIO
@@ -48,7 +36,7 @@
 
 /* PMSA003A PM sensor control pins */
 #ifndef PMSA003A_SET_GPIO
-#define PMSA003A_SET_GPIO GPIO_NUM_14  /* Sleep/Wake control (HIGH=active, LOW=sleep) */
+#define PMSA003A_SET_GPIO GPIO_NUM_19  /* Sleep/Wake control (HIGH=active, LOW=sleep) */
 #endif
 
 #ifndef PMSA003A_RESET_GPIO

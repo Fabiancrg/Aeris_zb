@@ -130,6 +130,11 @@ static TimerHandle_t pmsa003a_polling_timer = NULL;
 static bool sht45_initialized = false;
 static uint32_t sht45_serial_number = 0;
 
+/* Temperature offset compensation for self-heating (in °C)
+ * Positive value = sensor reads higher than actual, so we subtract
+ * Typical value: 2.0 to 4.0°C depending on PCB layout and airflow */
+static float temperature_offset_c = 3.0f;  // Default 3°C offset
+
 /* LPS22HB sensor state */
 static bool lps22hb_initialized = false;
 
@@ -271,7 +276,11 @@ static esp_err_t sht45_read_temp_humidity(float *temp_c, float *humidity_percent
     uint16_t rh_raw = (data[3] << 8) | data[4];
     
     // SHT45 conversion formulas from datasheet
-    *temp_c = -45.0f + 175.0f * ((float)temp_raw / 65535.0f);
+    float raw_temp = -45.0f + 175.0f * ((float)temp_raw / 65535.0f);
+    
+    // Apply temperature offset compensation for self-heating
+    *temp_c = raw_temp - temperature_offset_c;
+    
     *humidity_percent = -6.0f + 125.0f * ((float)rh_raw / 65535.0f);
     
     // Clamp humidity to valid range
@@ -1022,10 +1031,7 @@ static void pmsa003a_task(void *arg)
                                      pmsa003a_data.pm1_0_atm, pmsa003a_data.pm2_5_atm, 
                                      pmsa003a_data.pm10_atm);
                             
-                            // Reset wake time after successful read in polling mode
-                            if (pmsa003a_polling_interval_s > 0) {
-                                wake_time = 0;
-                            }
+                            // Data is valid - wake_time is managed by sleep logic, not here
                         }
                         
                         // Remove processed frame from buffer
@@ -1229,9 +1235,6 @@ esp_err_t aeris_driver_init(void)
                      pmsa003a_polling_interval_s);
         }
     }
-    
-    ESP_LOGI(TAG, "PMSA003A polling timer started with %lu second interval", 
-             pmsa003a_polling_interval_s);
     
     ESP_LOGI(TAG, "Aeris driver initialized successfully");
     
@@ -1530,4 +1533,25 @@ esp_err_t aeris_set_pm_polling_interval(uint32_t interval_s)
 uint32_t aeris_get_pm_polling_interval(void)
 {
     return pmsa003a_polling_interval_s;
+}
+
+/**
+ * @brief Set temperature offset compensation
+ * @param offset_c Temperature offset in degrees Celsius
+ *                 Positive value means sensor reads higher than actual
+ *                 (will be subtracted from raw reading)
+ */
+void aeris_set_temperature_offset(float offset_c)
+{
+    temperature_offset_c = offset_c;
+    ESP_LOGI(TAG, "Temperature offset set to %.2f°C", offset_c);
+}
+
+/**
+ * @brief Get current temperature offset compensation
+ * @return Temperature offset in degrees Celsius
+ */
+float aeris_get_temperature_offset(void)
+{
+    return temperature_offset_c;
 }

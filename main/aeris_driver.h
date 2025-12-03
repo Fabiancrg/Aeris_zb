@@ -203,6 +203,25 @@ esp_err_t pmsa003a_sleep(void);
  */
 esp_err_t pmsa003a_request_read(void);
 
+/**
+ * @brief Set temperature offset compensation for self-heating
+ * 
+ * The SHT45 sensor may read higher than actual ambient temperature due to
+ * self-heating from nearby components (SCD40, SGP41, ESP32, etc.).
+ * This offset is subtracted from the raw sensor reading.
+ * 
+ * @param offset_c Temperature offset in degrees Celsius (typically 2.0 to 4.0)
+ *                 Positive value = sensor reads high, will be subtracted
+ */
+void aeris_set_temperature_offset(float offset_c);
+
+/**
+ * @brief Get current temperature offset compensation value
+ * 
+ * @return Temperature offset in degrees Celsius
+ */
+float aeris_get_temperature_offset(void);
+
 #ifdef __cplusplus
 }
 #endif

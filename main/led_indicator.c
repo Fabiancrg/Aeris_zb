@@ -268,6 +268,38 @@ esp_err_t led_indicator_init(void)
     }
     
     ESP_LOGI(TAG, "RGB LED driver initialized (shared RMT channel)");
+    
+#if 0  // LED test sequence disabled for debugging - uncomment to re-enable
+    // Run LED test sequence: CO2 -> VOC -> Humidity -> PM2.5 -> NOx
+    ESP_LOGI(TAG, "Running LED test sequence...");
+    
+    // Temporarily enable LEDs for test (bypass enabled check)
+    bool was_enabled = s_thresholds.enabled;
+    s_thresholds.enabled = true;
+    
+    const led_id_t test_order[] = {LED_ID_CO2, LED_ID_VOC, LED_ID_HUMIDITY, LED_ID_PM25, LED_ID_NOX};
+    const char* test_names[] = {"CO2", "VOC", "Humidity", "PM2.5", "NOx"};
+    
+    for (int i = 0; i < 5; i++) {
+        ESP_LOGI(TAG, "  Testing %s LED (GPIO%d)...", test_names[i], LED_GPIO_MAP[test_order[i]]);
+        led_set_color(test_order[i], LED_COLOR_GREEN);
+        vTaskDelay(pdMS_TO_TICKS(500));
+    }
+    
+    // All LEDs on for 1 second
+    ESP_LOGI(TAG, "  All test LEDs on for 1s...");
+    vTaskDelay(pdMS_TO_TICKS(1000));
+    
+    // Turn off all test LEDs
+    for (int i = 0; i < 5; i++) {
+        led_set_color(test_order[i], LED_COLOR_OFF);
+    }
+    ESP_LOGI(TAG, "LED test sequence complete");
+    
+    // Restore enabled state
+    s_thresholds.enabled = was_enabled;
+#endif
+    
     return ESP_OK;
 }
 
@@ -309,10 +341,19 @@ esp_err_t led_set_color(led_id_t led_id, led_color_t color)
     
     // If disabled, always turn off
     if (!s_thresholds.enabled && color != LED_COLOR_OFF) {
+        ESP_LOGD(TAG, "%s LED: blocked (LEDs disabled), was %s", LED_NAMES[led_id], 
+                 color == LED_COLOR_GREEN ? "GREEN" : (color == LED_COLOR_ORANGE ? "ORANGE" : "RED"));
         color = LED_COLOR_OFF;
     }
     
     gpio_num_t target_gpio = LED_GPIO_MAP[led_id];
+    
+    // Debug: Log the LED set request
+    ESP_LOGI(TAG, "Setting %s LED (GPIO%d) to %s (current_gpio=%d, enabled=%d)", 
+             LED_NAMES[led_id], target_gpio, 
+             color == LED_COLOR_OFF ? "OFF" : (color == LED_COLOR_GREEN ? "GREEN" : 
+             (color == LED_COLOR_ORANGE ? "ORANGE" : "RED")),
+             s_current_gpio, s_thresholds.enabled);
     
     // If we need to switch to a different GPIO, reconfigure RMT
     if (s_current_gpio != target_gpio) {
@@ -320,7 +361,14 @@ esp_err_t led_set_color(led_id_t led_id, led_color_t color)
         rmt_disable(s_rmt_channel);
         
         // Delete and recreate channel on new GPIO
-        rmt_del_channel(s_rmt_channel);
+        esp_err_t del_ret = rmt_del_channel(s_rmt_channel);
+        if (del_ret != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to delete RMT channel: %s", esp_err_to_name(del_ret));
+        }
+        s_rmt_channel = NULL;
+        
+        // Small delay to ensure RMT resources are released
+        vTaskDelay(pdMS_TO_TICKS(5));
         
         rmt_tx_channel_config_t tx_chan_config = {
             .clk_src = RMT_CLK_SRC_DEFAULT,
@@ -345,10 +393,13 @@ esp_err_t led_set_color(led_id_t led_id, led_color_t color)
         }
         
         s_current_gpio = target_gpio;
+        ESP_LOGI(TAG, "RMT channel switched to GPIO%d", target_gpio);
     }
     
     rgb_t rgb = COLOR_MAP[color];
     uint8_t led_data[3] = {rgb.g, rgb.r, rgb.b};
+    
+    ESP_LOGD(TAG, "Transmitting RGB: G=%d R=%d B=%d", rgb.g, rgb.r, rgb.b);
     
     rmt_transmit_config_t tx_config = {
         .loop_count = 0,

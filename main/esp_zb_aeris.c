@@ -18,7 +18,6 @@
 #include "esp_zb_ota.h"
 #include "esp_zigbee_trace.h"
 #include "sdkconfig.h"
-#include "wifi_log.h"
 #include "esp_ota_ops.h"
 #include "esp_system.h"
 #include "esp_event.h"
@@ -113,7 +112,6 @@ static void status_led_stop_blink(void)
     }
 }
 
-#if !DISABLE_BOOT_BUTTON
 /* Boot button queue and ISR handler */
 static QueueHandle_t button_evt_queue = NULL;
 
@@ -221,13 +219,11 @@ static esp_err_t button_init(void)
     ESP_LOGI(TAG, "[OK] Boot button initialization complete");
     return ESP_OK;
 }
-#endif /* !DISABLE_BOOT_BUTTON */
 
 static esp_err_t deferred_driver_init(void)
 {
     ESP_LOGI(TAG, "[INIT] Starting deferred driver initialization...");
     
-#if !DISABLE_BOOT_BUTTON
     /* Initialize boot button for factory reset */
     esp_err_t button_ret = button_init();
     if (button_ret != ESP_OK) {
@@ -235,11 +231,7 @@ static esp_err_t deferred_driver_init(void)
         return button_ret;
     }
     vTaskDelay(pdMS_TO_TICKS(10));
-#else
-    ESP_LOGW(TAG, "[SKIP] Boot button disabled via DISABLE_BOOT_BUTTON flag");
-#endif
     
-#if !DISABLE_LEDS
     /* Initialize RGB LED indicator */
     ESP_LOGI(TAG, "[INIT] Initializing RGB LED indicator...");
     esp_err_t led_ret = led_indicator_init();
@@ -249,9 +241,6 @@ static esp_err_t deferred_driver_init(void)
     } else {
         ESP_LOGI(TAG, "[OK] LED indicator initialized");
     }
-#else
-    ESP_LOGW(TAG, "[SKIP] LED indicator disabled via DISABLE_LEDS flag");
-#endif
     
     /* Initialize air quality sensor driver */
     ESP_LOGI(TAG, "[INIT] Initializing air quality sensors...");
@@ -291,6 +280,9 @@ void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
         ESP_LOGI(TAG, "[JOIN] Device first start - factory new device");
         if (err_status == ESP_OK) {
             deferred_driver_init();
+            /* On first start, LED is enabled by default (from cluster config) */
+            led_set_enable(true);
+            ESP_LOGI(TAG, "[BOOT] LED threshold enabled (factory default)");
             status_led_start_blink();  // Start blinking during join
             esp_zb_bdb_start_top_level_commissioning(ESP_ZB_BDB_MODE_NETWORK_STEERING);
         } else {
@@ -302,11 +294,48 @@ void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
         ESP_LOGI(TAG, "[JOIN] Device reboot - previously joined network");
         if (err_status == ESP_OK) {
             deferred_driver_init();
+            
+            /* Sync LED settings from Zigbee attributes (persisted in NVS) */
+            led_thresholds_t thresholds;
+            led_get_thresholds(&thresholds);
+            
+            /* Read LED master enable (On/Off cluster) */
+            esp_zb_zcl_attr_t *led_on_off_attr = esp_zb_zcl_get_attribute(
+                HA_ESP_LED_CONFIG_ENDPOINT, 
+                ESP_ZB_ZCL_CLUSTER_ID_ON_OFF,
+                ESP_ZB_ZCL_CLUSTER_SERVER_ROLE,
+                ESP_ZB_ZCL_ATTR_ON_OFF_ON_OFF_ID);
+            if (led_on_off_attr && led_on_off_attr->data_p) {
+                thresholds.enabled = *(bool *)led_on_off_attr->data_p;
+                ESP_LOGI(TAG, "[BOOT] LED master enable from NVS: %s", thresholds.enabled ? "ON" : "OFF");
+            }
+            
+            /* Read LED mask (Analog Output cluster, custom attribute) */
+            esp_zb_zcl_attr_t *led_mask_attr = esp_zb_zcl_get_attribute(
+                HA_ESP_LED_CONFIG_ENDPOINT, 
+                ESP_ZB_ZCL_CLUSTER_ID_ANALOG_OUTPUT,
+                ESP_ZB_ZCL_CLUSTER_SERVER_ROLE,
+                ZCL_LED_ATTR_ENABLE_MASK);
+            if (led_mask_attr && led_mask_attr->data_p) {
+                thresholds.led_mask = *(uint8_t *)led_mask_attr->data_p;
+                ESP_LOGI(TAG, "[BOOT] LED mask from NVS: 0x%02X (CO2:%d VOC:%d NOx:%d PM2.5:%d Hum:%d)", 
+                         thresholds.led_mask,
+                         !!(thresholds.led_mask & (1<<0)), !!(thresholds.led_mask & (1<<1)), 
+                         !!(thresholds.led_mask & (1<<2)), !!(thresholds.led_mask & (1<<3)), 
+                         !!(thresholds.led_mask & (1<<4)));
+            }
+            
+            led_set_thresholds(&thresholds);
+            led_set_enable(thresholds.enabled);
+            
             if (esp_zb_bdb_is_factory_new()) {
                 status_led_start_blink();  // Start blinking during join
                 esp_zb_bdb_start_top_level_commissioning(ESP_ZB_BDB_MODE_NETWORK_STEERING);
             } else {
                 led_set_status(LED_COLOR_GREEN);  // Previously joined, should reconnect
+                /* Start periodic sensor updates for rejoined device */
+                esp_zb_scheduler_alarm((esp_zb_callback_t)sensor_periodic_update, 0, 5000);
+                ESP_LOGI(TAG, "[JOIN] Sensor updates started for rejoined device");
             }
         } else {
             led_set_status(LED_COLOR_RED);  // Error
@@ -346,9 +375,18 @@ void esp_zb_app_signal_handler(esp_zb_app_signal_t *signal_struct)
         break;
         
     default:
-        ESP_LOGI(TAG, "[ZDO] Signal: %s (0x%x), status: %s", 
-                esp_zb_zdo_signal_to_string(sig_type), sig_type,
-                esp_err_to_name(err_status));
+        /* Quiet down frequent network maintenance signals */
+        if (sig_type == ESP_ZB_NWK_SIGNAL_NO_ACTIVE_LINKS_LEFT ||      // 0x18
+            sig_type == ESP_ZB_NLME_STATUS_INDICATION ||               // 0x32
+            sig_type == ESP_ZB_ZDO_SIGNAL_DEVICE_UNAVAILABLE) {        // 0x3c
+            ESP_LOGD(TAG, "[ZDO] Signal: %s (0x%x), status: %s", 
+                    esp_zb_zdo_signal_to_string(sig_type), sig_type,
+                    esp_err_to_name(err_status));
+        } else {
+            ESP_LOGI(TAG, "[ZDO] Signal: %s (0x%x), status: %s", 
+                    esp_zb_zdo_signal_to_string(sig_type), sig_type,
+                    esp_err_to_name(err_status));
+        }
         break;
     }
 }
@@ -378,67 +416,102 @@ static esp_err_t zb_attribute_handler(const esp_zb_zcl_set_attr_value_message_t 
         }
         /* Handle threshold attributes */
         else if (message->info.cluster == ESP_ZB_ZCL_CLUSTER_ID_ANALOG_OUTPUT) {
-            uint16_t value = *(uint16_t *)message->attribute.data.value;
             bool updated = true;
             
             switch (message->attribute.id) {
-                case ZCL_LED_ATTR_VOC_ORANGE:
+                case ESP_ZB_ZCL_ATTR_ANALOG_OUTPUT_PRESENT_VALUE_ID: {
+                    // presentValue (0x55) is used as LED mask (float -> uint8)
+                    float float_val = *(float *)message->attribute.data.value;
+                    thresholds.led_mask = (uint8_t)float_val;
+                    ESP_LOGI(TAG, "LED mask set via presentValue: 0x%02X (CO2:%d VOC:%d NOx:%d PM2.5:%d Hum:%d)", 
+                             thresholds.led_mask,
+                             !!(thresholds.led_mask & (1<<0)), !!(thresholds.led_mask & (1<<1)), 
+                             !!(thresholds.led_mask & (1<<2)), !!(thresholds.led_mask & (1<<3)), 
+                             !!(thresholds.led_mask & (1<<4)));
+                    break;
+                }
+                case ZCL_LED_ATTR_VOC_ORANGE: {
+                    uint16_t value = *(uint16_t *)message->attribute.data.value;
                     thresholds.voc_orange = value;
                     ESP_LOGI(TAG, "VOC orange threshold: %d", value);
                     break;
-                case ZCL_LED_ATTR_VOC_RED:
+                }
+                case ZCL_LED_ATTR_VOC_RED: {
+                    uint16_t value = *(uint16_t *)message->attribute.data.value;
                     thresholds.voc_red = value;
                     ESP_LOGI(TAG, "VOC red threshold: %d", value);
                     break;
-                case ZCL_LED_ATTR_NOX_ORANGE:
+                }
+                case ZCL_LED_ATTR_NOX_ORANGE: {
+                    uint16_t value = *(uint16_t *)message->attribute.data.value;
                     thresholds.nox_orange = value;
                     ESP_LOGI(TAG, "NOx orange threshold: %d", value);
                     break;
-                case ZCL_LED_ATTR_NOX_RED:
+                }
+                case ZCL_LED_ATTR_NOX_RED: {
+                    uint16_t value = *(uint16_t *)message->attribute.data.value;
                     thresholds.nox_red = value;
                     ESP_LOGI(TAG, "NOx red threshold: %d", value);
                     break;
-                case ZCL_LED_ATTR_CO2_ORANGE:
+                }
+                case ZCL_LED_ATTR_CO2_ORANGE: {
+                    uint16_t value = *(uint16_t *)message->attribute.data.value;
                     thresholds.co2_orange = value;
                     ESP_LOGI(TAG, "CO2 orange threshold: %d ppm", value);
                     break;
-                case ZCL_LED_ATTR_CO2_RED:
+                }
+                case ZCL_LED_ATTR_CO2_RED: {
+                    uint16_t value = *(uint16_t *)message->attribute.data.value;
                     thresholds.co2_red = value;
                     ESP_LOGI(TAG, "CO2 red threshold: %d ppm", value);
                     break;
-                case ZCL_LED_ATTR_HUM_ORANGE_LOW:
+                }
+                case ZCL_LED_ATTR_HUM_ORANGE_LOW: {
+                    uint16_t value = *(uint16_t *)message->attribute.data.value;
                     thresholds.humidity_orange_low = value;
                     ESP_LOGI(TAG, "Humidity orange low threshold: %d%%", value);
                     break;
-                case ZCL_LED_ATTR_HUM_ORANGE_HIGH:
+                }
+                case ZCL_LED_ATTR_HUM_ORANGE_HIGH: {
+                    uint16_t value = *(uint16_t *)message->attribute.data.value;
                     thresholds.humidity_orange_high = value;
                     ESP_LOGI(TAG, "Humidity orange high threshold: %d%%", value);
                     break;
-                case ZCL_LED_ATTR_HUM_RED_LOW:
+                }
+                case ZCL_LED_ATTR_HUM_RED_LOW: {
+                    uint16_t value = *(uint16_t *)message->attribute.data.value;
                     thresholds.humidity_red_low = value;
                     ESP_LOGI(TAG, "Humidity red low threshold: %d%%", value);
                     break;
-                case ZCL_LED_ATTR_HUM_RED_HIGH:
+                }
+                case ZCL_LED_ATTR_HUM_RED_HIGH: {
+                    uint16_t value = *(uint16_t *)message->attribute.data.value;
                     thresholds.humidity_red_high = value;
                     ESP_LOGI(TAG, "Humidity red high threshold: %d%%", value);
                     break;
-                case ZCL_LED_ATTR_PM25_ORANGE:
+                }
+                case ZCL_LED_ATTR_PM25_ORANGE: {
+                    uint16_t value = *(uint16_t *)message->attribute.data.value;
                     thresholds.pm25_orange = value;
                     ESP_LOGI(TAG, "PM2.5 orange threshold: %d µg/m3", value);
                     break;
-                case ZCL_LED_ATTR_PM25_RED:
+                }
+                case ZCL_LED_ATTR_PM25_RED: {
+                    uint16_t value = *(uint16_t *)message->attribute.data.value;
                     thresholds.pm25_red = value;
                     ESP_LOGI(TAG, "PM2.5 red threshold: %d µg/m3", value);
                     break;
-                case ZCL_LED_ATTR_ENABLE_MASK:
-                    thresholds.led_mask = (uint8_t)value;
+                }
+                case ZCL_LED_ATTR_ENABLE_MASK: {
+                    uint8_t value = *(uint8_t *)message->attribute.data.value;
+                    thresholds.led_mask = value;
                     ESP_LOGI(TAG, "LED enable mask: 0x%02X (CO2:%d VOC:%d NOx:%d PM2.5:%d Hum:%d)", 
-                             (uint8_t)value,
+                             value,
                              !!(value & (1<<0)), !!(value & (1<<1)), !!(value & (1<<2)),
                              !!(value & (1<<3)), !!(value & (1<<4)));
                     break;
-                case ZCL_LED_ATTR_PM_POLL_INTERVAL:
-                    {
+                }
+                case ZCL_LED_ATTR_PM_POLL_INTERVAL: {
                         uint32_t interval = *(uint32_t *)message->attribute.data.value;
                         ESP_LOGI(TAG, "PM sensor polling interval: %lu seconds %s", 
                                  interval, interval == 0 ? "(continuous)" : "");
@@ -478,12 +551,13 @@ static esp_err_t zb_attribute_handler(const esp_zb_zcl_set_attr_value_message_t 
 static esp_err_t zb_action_handler(esp_zb_core_action_callback_id_t callback_id, const void *message)
 {
     esp_err_t ret = ESP_OK;
+    ESP_LOGI(TAG, "Zigbee action callback: 0x%x", callback_id);
     switch (callback_id) {
     case ESP_ZB_CORE_SET_ATTR_VALUE_CB_ID:
         ret = zb_attribute_handler((esp_zb_zcl_set_attr_value_message_t *)message);
         break;
     default:
-        ESP_LOGW(TAG, "Receive Zigbee action(0x%x) callback", callback_id);
+        ESP_LOGW(TAG, "Unhandled Zigbee action(0x%x) callback", callback_id);
         break;
     }
     return ret;
@@ -491,6 +565,44 @@ static esp_err_t zb_action_handler(esp_zb_core_action_callback_id_t callback_id,
 
 static void sensor_update_zigbee_attributes(uint8_t param)
 {
+    /* Read all sensors to update current_state */
+    float temp_c, humidity;
+    float pressure_hpa;
+    float pm1_0, pm2_5, pm10;
+    uint16_t voc_index, nox_index;
+    uint16_t co2_ppm;
+    
+    /* Read temperature and humidity from SHT45 */
+    if (aeris_read_temp_humidity(&temp_c, &humidity) != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to read temp/humidity");
+    }
+    
+    /* Read pressure from LPS22HB */
+    if (aeris_read_pressure(&pressure_hpa) != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to read pressure");
+    }
+    
+    /* Read PM data (from background task) */
+    if (aeris_read_pm(&pm1_0, &pm2_5, &pm10) != ESP_OK) {
+        ESP_LOGD(TAG, "PM data not available");
+    }
+    
+    /* Read VOC from SGP41 */
+    if (aeris_read_voc(&voc_index) != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to read VOC");
+    }
+    
+    /* Read NOx from SGP41 */
+    if (aeris_read_nox(&nox_index) != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to read NOx");
+    }
+    
+    /* Read CO2 from SCD40 */
+    if (aeris_read_co2(&co2_ppm) != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to read CO2");
+    }
+    
+    /* Now get the updated state */
     aeris_sensor_state_t state;
     esp_err_t ret = aeris_get_sensor_data(&state);
     
@@ -944,11 +1056,6 @@ void app_main(void)
     };
     
     ESP_ERROR_CHECK(nvs_flash_init());
-    
-    /* Initialize WiFi logging for remote debugging (if enabled) */
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
-    wifi_log_init();  /* Non-blocking, continues even if WiFi fails */
-    
     ESP_ERROR_CHECK(esp_zb_platform_config(&config));
     
     /* OTA validation */
