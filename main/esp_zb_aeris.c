@@ -874,14 +874,25 @@ static void esp_zb_task(void *pvParameters)
     /* Endpoint 3: PM1.0 - using Analog Input cluster with REPORTING flag */
     esp_zb_cluster_list_t *pm1_clusters = esp_zb_zcl_cluster_list_create();
     
-    /* Create Analog Input cluster with REPORTING flag */
-    static float pm1_present_value = 0.0f;
+    /* Create Analog Input cluster manually to set REPORTING flag on present_value from the start */
     esp_zb_attribute_list_t *pm1_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT);
-    ESP_ERROR_CHECK(esp_zb_cluster_add_attr(pm1_cluster, ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT,
-                                            ESP_ZB_ZCL_ATTR_ANALOG_INPUT_PRESENT_VALUE_ID, ESP_ZB_ZCL_ATTR_TYPE_SINGLE,
-                                            ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING, &pm1_present_value));
-    char pm1_desc[] = "\x0B""PM1.0 µg/m3";
-    esp_zb_analog_input_cluster_add_attr(pm1_cluster, ESP_ZB_ZCL_ATTR_ANALOG_INPUT_DESCRIPTION_ID, pm1_desc);
+    /* Mandatory attributes for Analog Input cluster */
+    static bool pm1_out_of_service = false;
+    static float pm1_present_value = 0.0f;
+    static uint8_t pm1_status_flags = 0;
+    esp_zb_cluster_add_attr(pm1_cluster, ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT,
+                            ESP_ZB_ZCL_ATTR_ANALOG_INPUT_OUT_OF_SERVICE_ID, ESP_ZB_ZCL_ATTR_TYPE_BOOL,
+                            ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY, &pm1_out_of_service);
+    esp_zb_cluster_add_attr(pm1_cluster, ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT,
+                            ESP_ZB_ZCL_ATTR_ANALOG_INPUT_PRESENT_VALUE_ID, ESP_ZB_ZCL_ATTR_TYPE_SINGLE,
+                            ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING, &pm1_present_value);
+    esp_zb_cluster_add_attr(pm1_cluster, ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT,
+                            ESP_ZB_ZCL_ATTR_ANALOG_INPUT_STATUS_FLAGS_ID, ESP_ZB_ZCL_ATTR_TYPE_8BITMAP,
+                            ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY, &pm1_status_flags);
+    char pm1_desc[] = "\x0B""PM1.0 ug/m3";
+    esp_zb_cluster_add_attr(pm1_cluster, ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT,
+                            ESP_ZB_ZCL_ATTR_ANALOG_INPUT_DESCRIPTION_ID, ESP_ZB_ZCL_ATTR_TYPE_CHAR_STRING,
+                            ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY, pm1_desc);
     ESP_ERROR_CHECK(esp_zb_cluster_list_add_analog_input_cluster(pm1_clusters, pm1_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
     ESP_ERROR_CHECK(esp_zb_cluster_list_add_identify_cluster(pm1_clusters, esp_zb_identify_cluster_create(NULL), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
     
@@ -896,14 +907,25 @@ static void esp_zb_task(void *pvParameters)
     /* Endpoint 4: PM2.5 - using Analog Input cluster with REPORTING flag */
     esp_zb_cluster_list_t *pm25_clusters = esp_zb_zcl_cluster_list_create();
     
-    /* Create Analog Input cluster with REPORTING flag */
-    static float pm25_present_value = 0.0f;
+    /* Create Analog Input cluster manually to set REPORTING flag on present_value from the start */
     esp_zb_attribute_list_t *pm25_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT);
-    ESP_ERROR_CHECK(esp_zb_cluster_add_attr(pm25_cluster, ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT,
-                                            ESP_ZB_ZCL_ATTR_ANALOG_INPUT_PRESENT_VALUE_ID, ESP_ZB_ZCL_ATTR_TYPE_SINGLE,
-                                            ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING, &pm25_present_value));
-    char pm25_desc[] = "\x0C""PM2.5 µg/m3";
-    esp_zb_analog_input_cluster_add_attr(pm25_cluster, ESP_ZB_ZCL_ATTR_ANALOG_INPUT_DESCRIPTION_ID, pm25_desc);
+    /* Mandatory attributes for Analog Input cluster */
+    static bool pm25_out_of_service = false;
+    static float pm25_present_value = 0.0f;
+    static uint8_t pm25_status_flags = 0;
+    esp_zb_cluster_add_attr(pm25_cluster, ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT,
+                            ESP_ZB_ZCL_ATTR_ANALOG_INPUT_OUT_OF_SERVICE_ID, ESP_ZB_ZCL_ATTR_TYPE_BOOL,
+                            ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY, &pm25_out_of_service);
+    esp_zb_cluster_add_attr(pm25_cluster, ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT,
+                            ESP_ZB_ZCL_ATTR_ANALOG_INPUT_PRESENT_VALUE_ID, ESP_ZB_ZCL_ATTR_TYPE_SINGLE,
+                            ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING, &pm25_present_value);
+    esp_zb_cluster_add_attr(pm25_cluster, ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT,
+                            ESP_ZB_ZCL_ATTR_ANALOG_INPUT_STATUS_FLAGS_ID, ESP_ZB_ZCL_ATTR_TYPE_8BITMAP,
+                            ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY, &pm25_status_flags);
+    char pm25_desc[] = "\x0B""PM2.5 ug/m3";
+    esp_zb_cluster_add_attr(pm25_cluster, ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT,
+                            ESP_ZB_ZCL_ATTR_ANALOG_INPUT_DESCRIPTION_ID, ESP_ZB_ZCL_ATTR_TYPE_CHAR_STRING,
+                            ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY, pm25_desc);
     ESP_ERROR_CHECK(esp_zb_cluster_list_add_analog_input_cluster(pm25_clusters, pm25_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
     ESP_ERROR_CHECK(esp_zb_cluster_list_add_identify_cluster(pm25_clusters, esp_zb_identify_cluster_create(NULL), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
     
@@ -918,14 +940,25 @@ static void esp_zb_task(void *pvParameters)
     /* Endpoint 5: PM10 - using Analog Input cluster with REPORTING flag */
     esp_zb_cluster_list_t *pm10_clusters = esp_zb_zcl_cluster_list_create();
     
-    /* Create Analog Input cluster with REPORTING flag */
-    static float pm10_present_value = 0.0f;
+    /* Create Analog Input cluster manually to set REPORTING flag on present_value from the start */
     esp_zb_attribute_list_t *pm10_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT);
-    ESP_ERROR_CHECK(esp_zb_cluster_add_attr(pm10_cluster, ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT,
-                                            ESP_ZB_ZCL_ATTR_ANALOG_INPUT_PRESENT_VALUE_ID, ESP_ZB_ZCL_ATTR_TYPE_SINGLE,
-                                            ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING, &pm10_present_value));
-    char pm10_desc[] = "\x0B""PM10 µg/m3";
-    esp_zb_analog_input_cluster_add_attr(pm10_cluster, ESP_ZB_ZCL_ATTR_ANALOG_INPUT_DESCRIPTION_ID, pm10_desc);
+    /* Mandatory attributes for Analog Input cluster */
+    static bool pm10_out_of_service = false;
+    static float pm10_present_value = 0.0f;
+    static uint8_t pm10_status_flags = 0;
+    esp_zb_cluster_add_attr(pm10_cluster, ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT,
+                            ESP_ZB_ZCL_ATTR_ANALOG_INPUT_OUT_OF_SERVICE_ID, ESP_ZB_ZCL_ATTR_TYPE_BOOL,
+                            ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY, &pm10_out_of_service);
+    esp_zb_cluster_add_attr(pm10_cluster, ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT,
+                            ESP_ZB_ZCL_ATTR_ANALOG_INPUT_PRESENT_VALUE_ID, ESP_ZB_ZCL_ATTR_TYPE_SINGLE,
+                            ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING, &pm10_present_value);
+    esp_zb_cluster_add_attr(pm10_cluster, ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT,
+                            ESP_ZB_ZCL_ATTR_ANALOG_INPUT_STATUS_FLAGS_ID, ESP_ZB_ZCL_ATTR_TYPE_8BITMAP,
+                            ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY, &pm10_status_flags);
+    char pm10_desc[] = "\x0A""PM10 ug/m3";
+    esp_zb_cluster_add_attr(pm10_cluster, ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT,
+                            ESP_ZB_ZCL_ATTR_ANALOG_INPUT_DESCRIPTION_ID, ESP_ZB_ZCL_ATTR_TYPE_CHAR_STRING,
+                            ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY, pm10_desc);
     ESP_ERROR_CHECK(esp_zb_cluster_list_add_analog_input_cluster(pm10_clusters, pm10_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
     ESP_ERROR_CHECK(esp_zb_cluster_list_add_identify_cluster(pm10_clusters, esp_zb_identify_cluster_create(NULL), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
     
@@ -940,14 +973,25 @@ static void esp_zb_task(void *pvParameters)
     /* Endpoint 6: VOC Index - using Analog Input cluster with REPORTING flag */
     esp_zb_cluster_list_t *voc_clusters = esp_zb_zcl_cluster_list_create();
     
-    /* Create Analog Input cluster with REPORTING flag */
-    static float voc_present_value = 0.0f;
+    /* Create Analog Input cluster manually to set REPORTING flag on present_value from the start */
     esp_zb_attribute_list_t *voc_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT);
-    ESP_ERROR_CHECK(esp_zb_cluster_add_attr(voc_cluster, ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT,
-                                            ESP_ZB_ZCL_ATTR_ANALOG_INPUT_PRESENT_VALUE_ID, ESP_ZB_ZCL_ATTR_TYPE_SINGLE,
-                                            ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING, &voc_present_value));
+    /* Mandatory attributes for Analog Input cluster */
+    static bool voc_out_of_service = false;
+    static float voc_present_value = 0.0f;
+    static uint8_t voc_status_flags = 0;
+    esp_zb_cluster_add_attr(voc_cluster, ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT,
+                            ESP_ZB_ZCL_ATTR_ANALOG_INPUT_OUT_OF_SERVICE_ID, ESP_ZB_ZCL_ATTR_TYPE_BOOL,
+                            ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY, &voc_out_of_service);
+    esp_zb_cluster_add_attr(voc_cluster, ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT,
+                            ESP_ZB_ZCL_ATTR_ANALOG_INPUT_PRESENT_VALUE_ID, ESP_ZB_ZCL_ATTR_TYPE_SINGLE,
+                            ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING, &voc_present_value);
+    esp_zb_cluster_add_attr(voc_cluster, ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT,
+                            ESP_ZB_ZCL_ATTR_ANALOG_INPUT_STATUS_FLAGS_ID, ESP_ZB_ZCL_ATTR_TYPE_8BITMAP,
+                            ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY, &voc_status_flags);
     char voc_desc[] = "\x09""VOC Index";
-    esp_zb_analog_input_cluster_add_attr(voc_cluster, ESP_ZB_ZCL_ATTR_ANALOG_INPUT_DESCRIPTION_ID, voc_desc);
+    esp_zb_cluster_add_attr(voc_cluster, ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT,
+                            ESP_ZB_ZCL_ATTR_ANALOG_INPUT_DESCRIPTION_ID, ESP_ZB_ZCL_ATTR_TYPE_CHAR_STRING,
+                            ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY, voc_desc);
     ESP_ERROR_CHECK(esp_zb_cluster_list_add_analog_input_cluster(voc_clusters, voc_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
     ESP_ERROR_CHECK(esp_zb_cluster_list_add_identify_cluster(voc_clusters, esp_zb_identify_cluster_create(NULL), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
     
@@ -962,14 +1006,25 @@ static void esp_zb_task(void *pvParameters)
     /* Endpoint 7: NOx Index - using Analog Input cluster with REPORTING flag */
     esp_zb_cluster_list_t *nox_clusters = esp_zb_zcl_cluster_list_create();
     
-    /* Create Analog Input cluster with REPORTING flag */
-    static float nox_present_value = 0.0f;
+    /* Create Analog Input cluster manually to set REPORTING flag on present_value from the start */
     esp_zb_attribute_list_t *nox_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT);
-    ESP_ERROR_CHECK(esp_zb_cluster_add_attr(nox_cluster, ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT,
-                                            ESP_ZB_ZCL_ATTR_ANALOG_INPUT_PRESENT_VALUE_ID, ESP_ZB_ZCL_ATTR_TYPE_SINGLE,
-                                            ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING, &nox_present_value));
+    /* Mandatory attributes for Analog Input cluster */
+    static bool nox_out_of_service = false;
+    static float nox_present_value = 0.0f;
+    static uint8_t nox_status_flags = 0;
+    esp_zb_cluster_add_attr(nox_cluster, ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT,
+                            ESP_ZB_ZCL_ATTR_ANALOG_INPUT_OUT_OF_SERVICE_ID, ESP_ZB_ZCL_ATTR_TYPE_BOOL,
+                            ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY, &nox_out_of_service);
+    esp_zb_cluster_add_attr(nox_cluster, ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT,
+                            ESP_ZB_ZCL_ATTR_ANALOG_INPUT_PRESENT_VALUE_ID, ESP_ZB_ZCL_ATTR_TYPE_SINGLE,
+                            ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY | ESP_ZB_ZCL_ATTR_ACCESS_REPORTING, &nox_present_value);
+    esp_zb_cluster_add_attr(nox_cluster, ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT,
+                            ESP_ZB_ZCL_ATTR_ANALOG_INPUT_STATUS_FLAGS_ID, ESP_ZB_ZCL_ATTR_TYPE_8BITMAP,
+                            ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY, &nox_status_flags);
     char nox_desc[] = "\x09""NOx Index";
-    esp_zb_analog_input_cluster_add_attr(nox_cluster, ESP_ZB_ZCL_ATTR_ANALOG_INPUT_DESCRIPTION_ID, nox_desc);
+    esp_zb_cluster_add_attr(nox_cluster, ESP_ZB_ZCL_CLUSTER_ID_ANALOG_INPUT,
+                            ESP_ZB_ZCL_ATTR_ANALOG_INPUT_DESCRIPTION_ID, ESP_ZB_ZCL_ATTR_TYPE_CHAR_STRING,
+                            ESP_ZB_ZCL_ATTR_ACCESS_READ_ONLY, nox_desc);
     ESP_ERROR_CHECK(esp_zb_cluster_list_add_analog_input_cluster(nox_clusters, nox_cluster, ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
     ESP_ERROR_CHECK(esp_zb_cluster_list_add_identify_cluster(nox_clusters, esp_zb_identify_cluster_create(NULL), ESP_ZB_ZCL_CLUSTER_SERVER_ROLE));
     
