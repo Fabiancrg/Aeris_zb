@@ -702,7 +702,10 @@ static void sensor_update_zigbee_attributes(uint8_t param)
                                   &hum_zigbee, false);
     
     /* Update Endpoint 2: Pressure */
-    int16_t pressure_zigbee = (int16_t)(state.pressure_hpa * 10);  // hPa to 0.1 hPa
+    /* Zigbee Pressure Measurement cluster uses 0.1 hPa units (int16)
+     * Convert hPa to 0.1 hPa by multiplying by 10
+     * Example: 997.33 hPa = 9973 in 0.1 hPa units */
+    int16_t pressure_zigbee = (int16_t)(state.pressure_hpa * 10.0f);  // hPa to 0.1 hPa units
     esp_zb_zcl_set_attribute_val(HA_ESP_PRESSURE_ENDPOINT, ESP_ZB_ZCL_CLUSTER_ID_PRESSURE_MEASUREMENT,
                                   ESP_ZB_ZCL_CLUSTER_SERVER_ROLE, ESP_ZB_ZCL_ATTR_PRESSURE_MEASUREMENT_VALUE_ID,
                                   &pressure_zigbee, false);
@@ -852,8 +855,11 @@ static void esp_zb_task(void *pvParameters)
     
     /* Create Pressure measurement cluster with REPORTING flag */
     static int16_t pressure_value = ESP_ZB_ZCL_ATTR_PRESSURE_MEASUREMENT_VALUE_UNKNOWN;
-    static int16_t pressure_min = 300 * 10;   // 300 hPa in 0.1 kPa units
-    static int16_t pressure_max = 1100 * 10;  // 1100 hPa in 0.1 kPa units
+    /* Zigbee Pressure Measurement cluster uses 0.1 hPa units (int16)
+     * Min: 300 hPa = 3000 in 0.1 hPa units
+     * Max: 1100 hPa = 11000 in 0.1 hPa units */
+    static int16_t pressure_min = 3000;   // 300 hPa in 0.1 hPa units
+    static int16_t pressure_max = 11000;  // 1100 hPa in 0.1 hPa units
     esp_zb_attribute_list_t *pressure_cluster = esp_zb_zcl_attr_list_create(ESP_ZB_ZCL_CLUSTER_ID_PRESSURE_MEASUREMENT);
     ESP_ERROR_CHECK(esp_zb_cluster_add_attr(pressure_cluster, ESP_ZB_ZCL_CLUSTER_ID_PRESSURE_MEASUREMENT,
                                             ESP_ZB_ZCL_ATTR_PRESSURE_MEASUREMENT_VALUE_ID, ESP_ZB_ZCL_ATTR_TYPE_S16,

@@ -734,16 +734,14 @@ static esp_err_t lps22hb_init(void)
     if (ret != ESP_OK) return ret;
     vTaskDelay(pdMS_TO_TICKS(10));
     
-    // Configure sensor
-    // CTRL_REG1: ODR=one-shot (0b000) for power savings, Enable block data update (BDU=1)
+    // Configure sensor for continuous 1Hz mode
+    // CTRL_REG1: ODR=1Hz (0b001), BDU=1 (bit 1), no low-pass filter
     // ODR bits [6:4]: 000=one-shot, 001=1Hz, 010=10Hz, 011=25Hz, 100=50Hz, 101=75Hz
-    // Using one-shot mode: sensor only measures when triggered via CTRL_REG2
-    // This saves significant power when sensor refresh interval is > 1 second
-    ret = lps22hb_write_reg(LPS22HB_CTRL_REG1, 0x0A);  // 0b00001010 = one-shot, BDU=1, LPF enabled
+    ret = lps22hb_write_reg(LPS22HB_CTRL_REG1, 0x12);  // 0b00010010 = 1Hz, BDU=1
     if (ret != ESP_OK) return ret;
     
     lps22hb_initialized = true;
-    ESP_LOGI(TAG, "LPS22HB initialized successfully (one-shot mode, BDU enabled)");
+    ESP_LOGI(TAG, "LPS22HB initialized successfully (1Hz continuous mode, BDU enabled)");
     
     return ESP_OK;
 }
@@ -757,19 +755,9 @@ static esp_err_t lps22hb_read_data(float *pressure_hpa, float *temperature_c)
         return ESP_ERR_INVALID_STATE;
     }
     
-    // Trigger one-shot measurement by setting ONE_SHOT bit in CTRL_REG2
-    esp_err_t ret = lps22hb_write_reg(LPS22HB_CTRL_REG2, 0x01);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "LPS22HB trigger one-shot failed: %s", esp_err_to_name(ret));
-        return ret;
-    }
-    
-    // Wait for measurement to complete (~10ms typical)
-    vTaskDelay(pdMS_TO_TICKS(15));
-    
-    // Check if new data is available
+    // Check if new data is available (sensor runs continuously at 1Hz)
     uint8_t status;
-    ret = lps22hb_read_reg(LPS22HB_STATUS_REG, &status, 1);
+    esp_err_t ret = lps22hb_read_reg(LPS22HB_STATUS_REG, &status, 1);
     if (ret != ESP_OK) return ret;
     
     // Read pressure (24-bit value)
