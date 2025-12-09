@@ -18,13 +18,15 @@
 
 static const char *TAG = "AERIS_DRIVER";
 
-/* SHT45 Commands (high repeatability) */
+/* SHT45 Commands */
 #define SHT45_CMD_MEASURE_HIGH  0xFD  // Measure T & RH with high precision (8.2ms)
+#define SHT45_CMD_MEASURE_MED   0xF6  // Measure T & RH with medium precision (4.5ms)
+#define SHT45_CMD_MEASURE_LOW   0xE0  // Measure T & RH with low precision (1.7ms)
 #define SHT45_CMD_SOFT_RESET    0x94  // Soft reset
 #define SHT45_CMD_READ_SERIAL   0x89  // Read serial number
 
 /* SHT45 timing constants (in ms) */
-#define SHT45_MEASURE_TIME_MS   10    // Measurement duration for high precision
+#define SHT45_MEASURE_TIME_MS   5     // Measurement duration for medium precision (4.5ms + margin)
 #define SHT45_RESET_TIME_MS     10    // Time after soft reset (datasheet says 1ms max, but add margin)
 
 /* LPS22HB Register Addresses */
@@ -250,8 +252,8 @@ static esp_err_t sht45_read_temp_humidity(float *temp_c, float *humidity_percent
         return ESP_ERR_INVALID_STATE;
     }
     
-    // Send measurement command (high repeatability)
-    uint8_t measure_cmd = SHT45_CMD_MEASURE_HIGH;
+    // Send measurement command (medium repeatability - reduces self-heating)
+    uint8_t measure_cmd = SHT45_CMD_MEASURE_MED;
     esp_err_t ret = i2c_master_transmit(sht45_dev_handle, &measure_cmd, 1, pdMS_TO_TICKS(1000));
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "SHT45 measure command failed: %s", esp_err_to_name(ret));
